@@ -40,8 +40,8 @@ These tasks should be completed first because all other features depend on them.
 | --- | --- | --- | --- |
 | [x] Set up Next.js, TypeScript, Tailwind CSS, app layout, linting, and basic folder structure | Developer 1 | `feature/project-setup` | None |
 | [x] Configure database, Prisma, environment variables, and base migration | Developer 1 | `feature/database-setup` | Project setup |
-| [ ] Create shared UI shell: sidebar, top bar, dashboard layout, empty states, buttons, tables, forms | Developer 2 | `feature/ui-shell` | Project setup |
-| [ ] Add seed data for admin user, staff user, workflow stages, service types, and document templates | Developer 1 | `feature/seed-data` | Database setup |
+| [x] Create shared UI shell: sidebar, top bar, dashboard layout, empty states, buttons, tables, forms | Developer 2 | `feature/ui-shell` | Project setup |
+| [x] Add seed data for admin user, staff user, workflow stages, service types, and document templates | Developer 1 | `feature/seed-data` | Database setup |
 
 Merge order:
 
