@@ -38,10 +38,10 @@ These tasks should be completed first because all other features depend on them.
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Set up Next.js, TypeScript, Tailwind CSS, app layout, linting, and basic folder structure | Developer 1 | `feature/project-setup` | None |
-| Configure database, Prisma, environment variables, and base migration | Developer 1 | `feature/database-setup` | Project setup |
-| Create shared UI shell: sidebar, top bar, dashboard layout, empty states, buttons, tables, forms | Developer 2 | `feature/ui-shell` | Project setup |
-| Add seed data for admin user, staff user, workflow stages, service types, and document templates | Developer 1 | `feature/seed-data` | Database setup |
+| [x] Set up Next.js, TypeScript, Tailwind CSS, app layout, linting, and basic folder structure | Developer 1 | `feature/project-setup` | None |
+| [x] Configure database, Prisma, environment variables, and base migration | Developer 1 | `feature/database-setup` | Project setup |
+| [ ] Create shared UI shell: sidebar, top bar, dashboard layout, empty states, buttons, tables, forms | Developer 2 | `feature/ui-shell` | Project setup |
+| [ ] Add seed data for admin user, staff user, workflow stages, service types, and document templates | Developer 1 | `feature/seed-data` | Database setup |
 
 Merge order:
 
@@ -54,10 +54,10 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Build login/logout flow | Developer 1 | `feature/auth-login` | Database setup |
-| Add admin/staff role model and route protection | Developer 1 | `feature/role-protection` | Auth login |
-| Build staff management screen for admin | Developer 1 | `feature/staff-management` | Role protection |
-| Add current user profile menu and password/account basics | Developer 2 | `feature/user-profile` | Auth login |
+| [ ] Build login/logout flow | Developer 1 | `feature/auth-login` | Database setup |
+| [ ] Add admin/staff role model and route protection | Developer 1 | `feature/role-protection` | Auth login |
+| [ ] Build staff management screen for admin | Developer 1 | `feature/staff-management` | Role protection |
+| [ ] Add current user profile menu and password/account basics | Developer 2 | `feature/user-profile` | Auth login |
 
 Merge order:
 
@@ -70,13 +70,13 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Create client database model and API/actions | Developer 2 | `feature/client-model` | Database setup |
-| Build client registration form | Developer 2 | `feature/client-registration` | Client model, UI shell |
-| Build client list with search and filters | Developer 2 | `feature/client-list` | Client registration |
-| Build client profile page | Developer 2 | `feature/client-profile` | Client list |
-| Create application database model linked to client | Developer 2 | `feature/application-model` | Client model |
-| Build application creation form | Developer 2 | `feature/application-create` | Application model |
-| Add admin visibility for all clients and staff visibility for assigned clients | Developer 1 | `feature/client-permissions` | Role protection, client profile |
+| [ ] Create client database model and API/actions | Developer 2 | `feature/client-model` | Database setup |
+| [ ] Build client registration form | Developer 2 | `feature/client-registration` | Client model, UI shell |
+| [ ] Build client list with search and filters | Developer 2 | `feature/client-list` | Client registration |
+| [ ] Build client profile page | Developer 2 | `feature/client-profile` | Client list |
+| [ ] Create application database model linked to client | Developer 2 | `feature/application-model` | Client model |
+| [ ] Build application creation form | Developer 2 | `feature/application-create` | Application model |
+| [ ] Add admin visibility for all clients and staff visibility for assigned clients | Developer 1 | `feature/client-permissions` | Role protection, client profile |
 
 Merge order:
 
@@ -92,12 +92,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Define workflow stage constants and transition rules | Developer 1 | `feature/workflow-rules` | Application model |
-| Add workflow stage history model | Developer 1 | `feature/stage-history` | Workflow rules |
-| Build application detail page with current stage | Developer 2 | `feature/application-detail` | Application create, workflow rules |
-| Build admin pipeline board by stage | Developer 2 | `feature/workflow-pipeline` | Application detail, stage history |
-| Add stage movement actions and activity logging | Developer 1 | `feature/stage-transitions` | Stage history, pipeline |
-| Add approved/refused decision branching | Developer 2 | `feature/decision-branching` | Stage transitions |
+| [ ] Define workflow stage constants and transition rules | Developer 1 | `feature/workflow-rules` | Application model |
+| [ ] Add workflow stage history model | Developer 1 | `feature/stage-history` | Workflow rules |
+| [ ] Build application detail page with current stage | Developer 2 | `feature/application-detail` | Application create, workflow rules |
+| [ ] Build admin pipeline board by stage | Developer 2 | `feature/workflow-pipeline` | Application detail, stage history |
+| [ ] Add stage movement actions and activity logging | Developer 1 | `feature/stage-transitions` | Stage history, pipeline |
+| [ ] Add approved/refused decision branching | Developer 2 | `feature/decision-branching` | Stage transitions |
 
 Merge order:
 
@@ -112,12 +112,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Create task database model and API/actions | Developer 1 | `feature/task-model` | Client/application models |
-| Build admin task creation and assignment UI | Developer 1 | `feature/admin-task-assignment` | Task model, staff management |
-| Build staff task dashboard | Developer 2 | `feature/staff-task-dashboard` | Task model |
-| Add task status updates, comments, and completion flow | Developer 2 | `feature/task-status-updates` | Staff task dashboard |
-| Add overdue task indicators and filters | Developer 1 | `feature/task-overdue-filters` | Task status updates |
-| Link tasks to workflow stages and client profile | Developer 2 | `feature/task-client-linking` | Client profile, task model |
+| [ ] Create task database model and API/actions | Developer 1 | `feature/task-model` | Client/application models |
+| [ ] Build admin task creation and assignment UI | Developer 1 | `feature/admin-task-assignment` | Task model, staff management |
+| [ ] Build staff task dashboard | Developer 2 | `feature/staff-task-dashboard` | Task model |
+| [ ] Add task status updates, comments, and completion flow | Developer 2 | `feature/task-status-updates` | Staff task dashboard |
+| [ ] Add overdue task indicators and filters | Developer 1 | `feature/task-overdue-filters` | Task status updates |
+| [ ] Link tasks to workflow stages and client profile | Developer 2 | `feature/task-client-linking` | Client profile, task model |
 
 Merge order:
 
@@ -132,12 +132,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Create document and checklist template database models | Developer 2 | `feature/document-models` | Application model |
-| Build admin document checklist template management | Developer 1 | `feature/document-template-admin` | Document models |
-| Build document upload UI on application/client profile | Developer 2 | `feature/document-upload` | Document models, client profile |
-| Add document verification status and notes | Developer 2 | `feature/document-verification` | Document upload |
-| Build document review queue for admin/senior staff | Developer 1 | `feature/document-review-queue` | Document verification |
-| Add missing document indicators to workflow and dashboard | Developer 1 | `feature/document-metrics` | Document verification |
+| [ ] Create document and checklist template database models | Developer 2 | `feature/document-models` | Application model |
+| [ ] Build admin document checklist template management | Developer 1 | `feature/document-template-admin` | Document models |
+| [ ] Build document upload UI on application/client profile | Developer 2 | `feature/document-upload` | Document models, client profile |
+| [ ] Add document verification status and notes | Developer 2 | `feature/document-verification` | Document upload |
+| [ ] Build document review queue for admin/senior staff | Developer 1 | `feature/document-review-queue` | Document verification |
+| [ ] Add missing document indicators to workflow and dashboard | Developer 1 | `feature/document-metrics` | Document verification |
 
 Merge order:
 
@@ -152,11 +152,11 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Create payment/invoice database model | Developer 1 | `feature/payment-model` | Application model |
-| Build payment entry form and payment status display | Developer 1 | `feature/payment-entry` | Payment model |
-| Add invoice number and receipt upload support | Developer 1 | `feature/invoice-receipts` | Payment entry |
-| Show payment summary on client/application profile | Developer 2 | `feature/payment-profile-summary` | Payment entry, client profile |
-| Add outstanding balance metric to admin dashboard data | Developer 1 | `feature/payment-dashboard-metrics` | Payment entry |
+| [ ] Create payment/invoice database model | Developer 1 | `feature/payment-model` | Application model |
+| [ ] Build payment entry form and payment status display | Developer 1 | `feature/payment-entry` | Payment model |
+| [ ] Add invoice number and receipt upload support | Developer 1 | `feature/invoice-receipts` | Payment entry |
+| [ ] Show payment summary on client/application profile | Developer 2 | `feature/payment-profile-summary` | Payment entry, client profile |
+| [ ] Add outstanding balance metric to admin dashboard data | Developer 1 | `feature/payment-dashboard-metrics` | Payment entry |
 
 Merge order:
 
@@ -170,12 +170,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Create quality review model/checklist | Developer 1 | `feature/quality-review-model` | Workflow rules |
-| Build quality review queue | Developer 1 | `feature/quality-review-queue` | Quality review model |
-| Add review approval/correction flow | Developer 1 | `feature/review-approval-flow` | Quality review queue |
-| Block application submission until review passes | Developer 1 | `feature/submission-blocking` | Review approval flow |
-| Build submission details form: reference, date, biometrics, portal | Developer 2 | `feature/submission-details` | Submission blocking |
-| Add application tracking updates and reminders | Developer 2 | `feature/application-tracking` | Submission details |
+| [ ] Create quality review model/checklist | Developer 1 | `feature/quality-review-model` | Workflow rules |
+| [ ] Build quality review queue | Developer 1 | `feature/quality-review-queue` | Quality review model |
+| [ ] Add review approval/correction flow | Developer 1 | `feature/review-approval-flow` | Quality review queue |
+| [ ] Block application submission until review passes | Developer 1 | `feature/submission-blocking` | Review approval flow |
+| [ ] Build submission details form: reference, date, biometrics, portal | Developer 2 | `feature/submission-details` | Submission blocking |
+| [ ] Add application tracking updates and reminders | Developer 2 | `feature/application-tracking` | Submission details |
 
 Merge order:
 
@@ -190,12 +190,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Build admin dashboard data queries | Developer 1 | `feature/admin-dashboard-data` | Tasks, workflow, payments |
-| Build admin dashboard UI with charts and cards | Developer 1 | `feature/admin-dashboard-ui` | Admin dashboard data |
-| Build staff dashboard data queries | Developer 2 | `feature/staff-dashboard-data` | Tasks, assigned clients |
-| Build staff dashboard UI | Developer 2 | `feature/staff-dashboard-ui` | Staff dashboard data |
-| Add reports page for approvals, refusals, revenue, staff workload, and stage duration | Developer 1 | `feature/reports-page` | Admin dashboard data |
-| Add export filters for reports | Developer 2 | `feature/report-filters` | Reports page |
+| [ ] Build admin dashboard data queries | Developer 1 | `feature/admin-dashboard-data` | Tasks, workflow, payments |
+| [ ] Build admin dashboard UI with charts and cards | Developer 1 | `feature/admin-dashboard-ui` | Admin dashboard data |
+| [ ] Build staff dashboard data queries | Developer 2 | `feature/staff-dashboard-data` | Tasks, assigned clients |
+| [ ] Build staff dashboard UI | Developer 2 | `feature/staff-dashboard-ui` | Staff dashboard data |
+| [ ] Add reports page for approvals, refusals, revenue, staff workload, and stage duration | Developer 1 | `feature/reports-page` | Admin dashboard data |
+| [ ] Add export filters for reports | Developer 2 | `feature/report-filters` | Reports page |
 
 Merge order:
 
@@ -210,12 +210,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Create activity log model and helper | Developer 1 | `feature/activity-log` | Core models |
-| Show activity timeline on client/application profile | Developer 2 | `feature/activity-timeline` | Activity log, client profile |
-| Add in-app notification model | Developer 1 | `feature/notification-model` | Task model |
-| Build notification dropdown/list | Developer 2 | `feature/notification-ui` | Notification model |
-| Trigger notifications for task assignment, overdue tasks, and stage changes | Developer 1 | `feature/notification-triggers` | Notification UI |
-| Improve validation, loading states, empty states, and error states | Developer 2 | `feature/ui-polish` | Most UI complete |
+| [ ] Create activity log model and helper | Developer 1 | `feature/activity-log` | Core models |
+| [ ] Show activity timeline on client/application profile | Developer 2 | `feature/activity-timeline` | Activity log, client profile |
+| [ ] Add in-app notification model | Developer 1 | `feature/notification-model` | Task model |
+| [ ] Build notification dropdown/list | Developer 2 | `feature/notification-ui` | Notification model |
+| [ ] Trigger notifications for task assignment, overdue tasks, and stage changes | Developer 1 | `feature/notification-triggers` | Notification UI |
+| [ ] Improve validation, loading states, empty states, and error states | Developer 2 | `feature/ui-polish` | Most UI complete |
 
 Merge order:
 
@@ -230,12 +230,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| Add unit tests for workflow rules and permissions | Developer 1 | `feature/workflow-permission-tests` | Workflow and auth |
-| Add basic integration tests for client, task, and application flows | Developer 2 | `feature/core-flow-tests` | Main features complete |
-| Add production environment configuration guide | Developer 1 | `feature/deployment-docs` | Project setup |
-| Prepare database migration/deployment checklist | Developer 1 | `feature/db-deployment-checklist` | Database stable |
-| Test full admin workflow from inquiry to decision | Developer 2 | `feature/manual-qa-admin-flow` | Main features complete |
-| Fix final bugs from QA | Both | `fix/final-qa-issues` | QA complete |
+| [ ] Add unit tests for workflow rules and permissions | Developer 1 | `feature/workflow-permission-tests` | Workflow and auth |
+| [ ] Add basic integration tests for client, task, and application flows | Developer 2 | `feature/core-flow-tests` | Main features complete |
+| [ ] Add production environment configuration guide | Developer 1 | `feature/deployment-docs` | Project setup |
+| [ ] Prepare database migration/deployment checklist | Developer 1 | `feature/db-deployment-checklist` | Database stable |
+| [ ] Test full admin workflow from inquiry to decision | Developer 2 | `feature/manual-qa-admin-flow` | Main features complete |
+| [ ] Fix final bugs from QA | Both | `fix/final-qa-issues` | QA complete |
 
 Merge order:
 
@@ -311,4 +311,3 @@ A task is done only when:
 6. Merge latest `main` into your branch before opening PR.
 7. Open PR and ask the other developer to review.
 8. Merge after approval and passing checks.
-

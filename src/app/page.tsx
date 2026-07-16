@@ -20,15 +20,17 @@ import {
 } from "lucide-react";
 
 export default function Home() {
-  const { user, login, isAuthenticated } = useAuth();
+  const { user, login, isAuthenticated, loginError } = useAuth();
   const [currentTab, setCurrentTab] = useState("dashboard");
-  const [email, setEmail] = useState("admin@waypoint.com");
-  const [password, setPassword] = useState("password");
-  const [role, setRole] = useState<"ADMIN" | "STAFF">("ADMIN");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, role);
+    setLoading(true);
+    await login(email, password);
+    setLoading(false);
   };
 
   if (!isAuthenticated) {
@@ -89,40 +91,11 @@ export default function Home() {
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">
-              {/* Role Toggle Selector */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Select Demo Role</label>
-                <div className="grid grid-cols-2 gap-2 bg-muted/40 p-1.5 rounded-xl border border-border">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRole("ADMIN");
-                      setEmail("admin@waypoint.com");
-                    }}
-                    className={`py-2 rounded-lg text-xs font-bold transition-all ${
-                      role === "ADMIN" 
-                        ? "bg-card text-foreground shadow-sm" 
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Admin Profile
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRole("STAFF");
-                      setEmail("officer@waypoint.com");
-                    }}
-                    className={`py-2 rounded-lg text-xs font-bold transition-all ${
-                      role === "STAFF" 
-                        ? "bg-card text-foreground shadow-sm" 
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Staff Profile
-                  </button>
+              {loginError && (
+                <div className="bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold px-4 py-2.5 rounded-xl">
+                  {loginError}
                 </div>
-              </div>
+              )}
 
               {/* Email Input */}
               <div className="space-y-1">
@@ -156,10 +129,18 @@ export default function Home() {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full bg-primary text-primary-foreground font-semibold rounded-xl py-3 text-sm hover:opacity-95 shadow-md shadow-primary/10 transition-all flex items-center justify-center gap-2 group"
+                disabled={loading}
+                className="w-full bg-primary text-primary-foreground font-semibold rounded-xl py-3 text-sm hover:opacity-95 shadow-md shadow-primary/10 transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign In 
-                <ArrowRight className="h-4 w-4 transform group-hover:translate-x-1 transition-transform" />
+                {loading ? (
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <ArrowRight className="h-4 w-4 transform group-hover:translate-x-1 transition-transform" />
+                )}
+                {loading ? "Signing In..." : "Sign In"}
               </button>
             </form>
           </div>
