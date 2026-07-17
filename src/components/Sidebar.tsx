@@ -31,6 +31,7 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
     { id: "payments", name: "Payments", icon: CreditCard, roles: ["ADMIN"] },
     { id: "reviews", name: "Quality Review", icon: ShieldCheck, roles: ["ADMIN"] },
     { id: "reports", name: "Reports", icon: BarChart3, roles: ["ADMIN"] },
+    { id: "staff", name: "Staff Management", icon: Users, roles: ["ADMIN"] },
     { id: "settings", name: "Settings", icon: Settings, roles: ["ADMIN", "STAFF"] },
   ];
 

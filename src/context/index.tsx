@@ -8,6 +8,7 @@ interface User {
   email: string;
   role: string;
   status: string;
+  phone?: string | null;
 }
 
 interface AuthContextType {
@@ -23,6 +24,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Load user session from local storage on mount
+  React.useEffect(() => {
+    const savedUser = localStorage.getItem("waypoint_user");
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch {
+        localStorage.removeItem("waypoint_user");
+      }
+    }
+  }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setLoginError(null);
@@ -42,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setUser(data.user);
+      localStorage.setItem("waypoint_user", JSON.stringify(data.user));
       return true;
     } catch {
       setLoginError("Network error. Please try again.");
@@ -52,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     setLoginError(null);
+    localStorage.removeItem("waypoint_user");
   };
 
   return (
