@@ -54,10 +54,10 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| [ ] Build login/logout flow | Developer 1 | `feature/auth-login` | Database setup |
-| [ ] Add admin/staff role model and route protection | Developer 1 | `feature/role-protection` | Auth login |
-| [ ] Build staff management screen for admin | Developer 1 | `feature/staff-management` | Role protection |
-| [ ] Add current user profile menu and password/account basics | Developer 2 | `feature/user-profile` | Auth login |
+| [x] Build login/logout flow | Developer 1 | `feature/auth-login` | Database setup |
+| [x] Add admin/staff role model and route protection | Developer 1 | `feature/role-protection` | Auth login |
+| [x] Build staff management screen for admin | Developer 1 | `feature/staff-management` | Role protection |
+| [x] Add current user profile menu and password/account basics | Developer 2 | `feature/user-profile` | Auth login |
 
 Merge order:
 

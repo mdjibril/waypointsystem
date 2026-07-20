@@ -7,15 +7,17 @@ datasource db {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  name         String
-  email        String   @unique
-  phone        String?
-  role         String   @default("staff")
-  status       String   @default("active")
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  name            String
+  email           String   @unique
+  phone           String?
+  role            String   @default("staff")
+  status          String   @default("active")
+  passwordHash    String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  clientsCreated  Client[] @relation("ClientCreatedBy")
+  clientsAssigned Client[] @relation("ClientAssignedStaff")
 
   @@map("users")
 }
@@ -55,4 +57,25 @@ model DocumentTemplate {
   updatedAt   DateTime @updatedAt
 
   @@map("document_templates")
+}
+
+model Client {
+  id              Int      @id @default(autoincrement())
+  fileNumber      String   @unique
+  firstName       String
+  lastName        String
+  email           String
+  phone           String
+  address         String?
+  passportNumber  String?
+  dateOfBirth     DateTime?
+  source          String
+  createdById     Int
+  createdBy       User     @relation("ClientCreatedBy", fields: [createdById], references: [id])
+  assignedStaffId Int?
+  assignedStaff   User?    @relation("ClientAssignedStaff", fields: [assignedStaffId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("clients")
 }
