@@ -76,7 +76,7 @@ Merge order:
 | [x] Build client profile page | Developer 2 | `feature/client-profile` | Client list |
 | [x] Create application database model linked to client | Developer 2 | `feature/application-model` | Client model |
 | [x] Build application creation form | Developer 2 | `feature/application-create` | Application model |
-| [ ] Add admin visibility for all clients and staff visibility for assigned clients | Developer 1 | `feature/client-permissions` | Role protection, client profile |
+| [x] Add admin visibility for all clients and staff visibility for assigned clients | Developer 1 | `feature/client-permissions` | Role protection, client profile |
 
 Merge order:
 
