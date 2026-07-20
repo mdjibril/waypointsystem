@@ -336,3 +336,225 @@ npm run build
 7. **Session cache update on profile change:**
    - Update the display name — verify `localStorage.setItem("waypoint_user", ...)` is called with updated values.
    - Refresh the page after profile update — user data reflects the changes.
+
+---
+
+# Phase 3 — Test Plan: Client And Application Management
+
+## Task 1 — Client Database Model and API/Actions
+
+### Setup Commands
+
+```bash
+# Start the dev server (required for API tests)
+npm run dev
+
+# Regenerate Prisma client after model changes
+npm run db:generate
+
+# Apply the migration to the database
+npx prisma migrate dev
+
+# Open Prisma Studio to inspect client records
+npm run db:studio
+```
+
+---
+
+### Test Steps
+
+1. **Prisma schema validation:**
+
+   ```bash
+   # Check schema compiles and client is generated
+   npm run db:generate
+   ```
+   Expected: Completes with "✔ Generated Prisma Client" and no errors.
+
+   ```bash
+   # Verify the Client model is present in the schema
+   grep -A 20 "model Client" prisma/schema.prisma
+   ```
+   Expected: Client model with all fields including `fileNumber`, `firstName`, `lastName`, `email`, `phone`, `address`, `passportNumber`, `dateOfBirth`, `source`, `createdById`, `assignedStaffId`, `@@map("clients")`.
+
+   ```bash
+   # Verify reverse relations on User model
+   grep -A 3 "clientsCreated\|clientsAssigned" prisma/schema.prisma
+   ```
+   Expected: `clientsCreated Client[] @relation("ClientCreatedBy")` and `clientsAssigned Client[] @relation("ClientAssignedStaff")` on the User model.
+
+2. **Migration file exists:**
+
+   ```bash
+   # Check migration file
+   cat prisma/migrations/20260720000000_add_clients/migration.sql
+   ```
+   Expected: SQL with `CREATE TABLE "clients"`, a unique index on `"fileNumber"`, and foreign keys referencing `"users"("id")` for both `createdById` and `assignedStaffId`.
+
+3. **API — GET /api/clients (list all):**
+
+   ```bash
+   # Fetch all clients
+   curl -s http://localhost:3000/api/clients | jq
+   ```
+   Expected: Returns 200 with `{ clients: [] }` (empty array if no clients exist yet). Each client includes nested `createdBy` and `assignedStaff` objects.
+
+4. **API — POST /api/clients (create client, required fields only):**
+
+   ```bash
+   # Create a new client with required fields
+   curl -s -X POST http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -d '{
+       "firstName": "John",
+       "lastName": "Doe",
+       "email": "john@example.com",
+       "phone": "+1234567890",
+       "source": "website",
+       "createdById": 1
+     }' | jq
+   ```
+   Expected: Returns 201 with the new client object. `fileNumber` is auto-generated in format `WP-YYYY-NNNN`.
+
+   ```bash
+   # Try creating with missing required fields
+   curl -s -X POST http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -d '{"firstName": "NoEmail"}' | jq
+   ```
+   Expected: Returns 400 with `{ error: "First name, last name, email, phone, source, and createdById are required" }`.
+
+5. **API — POST /api/clients (with optional fields):**
+
+   ```bash
+   # Create a client with all fields including optional ones
+   curl -s -X POST http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -d '{
+       "firstName": "Jane",
+       "lastName": "Smith",
+       "email": "jane@example.com",
+       "phone": "+9876543210",
+       "address": "123 Main St, Lagos",
+       "passportNumber": "A12345678",
+       "dateOfBirth": "1990-05-15T00:00:00.000Z",
+       "source": "referral",
+       "createdById": 1,
+       "assignedStaffId": 2
+     }' | jq
+   ```
+   Expected: Returns 201. All optional fields are stored. `dateOfBirth` stored as timestamp. `assignedStaff` nested object includes staff name and email.
+
+6. **API — PATCH /api/clients (update client):**
+
+   ```bash
+   # Update client name
+   curl -s -X PATCH http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -d '{"id": 1, "firstName": "UpdatedJohn", "lastName": "UpdatedDoe"}' | jq
+   ```
+   Expected: Returns 200 with updated client. Only the sent fields change.
+
+   ```bash
+   # Clear optional fields by setting to null
+   curl -s -X PATCH http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -d '{"id": 1, "address": null, "passportNumber": null}' | jq
+   ```
+   Expected: Returns 200. `address` and `passportNumber` are now `null`.
+
+   ```bash
+   # Reassign staff
+   curl -s -X PATCH http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -d '{"id": 1, "assignedStaffId": 2}' | jq
+   ```
+   Expected: Returns 200. `assignedStaff` nested object reflects the new staff member.
+
+   ```bash
+   # Missing id should fail
+   curl -s -X PATCH http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -d '{"firstName": "NoId"}' | jq
+   ```
+   Expected: Returns 400 with `{ error: "Client ID is required" }`.
+
+7. **Server action — getClientsAction:**
+
+   ```bash
+   # Test via a quick Node.js script
+   node -e "
+   const { getClientsAction } = require('./dist/app/actions/clientActions.js');
+   getClientsAction().then(console.log);
+   "
+   ```
+   Alternatively, test from the browser console or a React component:
+   ```typescript
+   import { getClientsAction } from "@/app/actions/clientActions";
+   const { clients } = await getClientsAction();
+   // clients contains array with nested createdBy and assignedStaff
+   ```
+
+8. **Server action — getClientAction:**
+
+   ```typescript
+   import { getClientAction } from "@/app/actions/clientActions";
+
+   const { client } = await getClientAction(1);
+   // client contains the client object with relations
+
+   const { client: none } = await getClientAction(9999);
+   // none === null for non-existent id
+   ```
+
+9. **Server action — createClientAction:**
+
+   ```typescript
+   import { createClientAction } from "@/app/actions/clientActions";
+
+   const { client } = await createClientAction({
+     firstName: "Alice",
+     lastName: "Wonder",
+     email: "alice@example.com",
+     phone: "+1111111111",
+     source: "walk-in",
+     createdById: 1,
+   });
+   // client.fileNumber === "WP-2026-0003" (increments correctly)
+   ```
+
+10. **Server action — updateClientAction:**
+
+    ```typescript
+    import { updateClientAction } from "@/app/actions/clientActions";
+
+    const { client } = await updateClientAction(1, { firstName: "Jane" });
+    // client.firstName === "Jane"
+
+    const { client: cleared } = await updateClientAction(1, { address: null });
+    // cleared.address === null
+    ```
+
+11. **Error handling:**
+
+    ```bash
+    # Test with invalid JSON body
+    curl -s -X POST http://localhost:3000/api/clients \
+      -H "Content-Type: application/json" \
+      -d 'not-json' | jq
+    ```
+    Expected: Returns 500 with a server error.
+
+    ```bash
+    # Test unhandled route
+    curl -s -X PUT http://localhost:3000/api/clients | jq
+    ```
+    Expected: Returns 405 Method Not Allowed (Next.js default for unhandled methods).
+
+12. **Build verification:**
+
+    ```bash
+    # Full production build
+    npm run build
+    ```
+    Expected: "✓ Compiled successfully", "✓ Generating static pages", and `/api/clients` appears with the `ƒ` (Dynamic) marker in the route list.

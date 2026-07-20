@@ -58,6 +58,23 @@ export default function Home() {
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [passwordLoading, setPasswordLoading] = useState(false);
 
+  // Client Registration State
+  const [clients, setClients] = useState<any[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [isAddClientOpen, setIsAddClientOpen] = useState(false);
+  const [newClientFirstName, setNewClientFirstName] = useState("");
+  const [newClientLastName, setNewClientLastName] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
+  const [newClientPhone, setNewClientPhone] = useState("");
+  const [newClientAddress, setNewClientAddress] = useState("");
+  const [newClientPassport, setNewClientPassport] = useState("");
+  const [newClientDob, setNewClientDob] = useState("");
+  const [newClientSource, setNewClientSource] = useState("walk-in");
+  const [newClientAssignedStaffId, setNewClientAssignedStaffId] = useState("");
+  const [addClientError, setAddClientError] = useState<string | null>(null);
+  const [addClientSuccess, setAddClientSuccess] = useState<string | null>(null);
+  const [addClientLoading, setAddClientLoading] = useState(false);
+
   // Sync profile fields when user is loaded
   useEffect(() => {
     if (user) {
@@ -88,6 +105,28 @@ export default function Home() {
       fetchStaff();
     }
   }, [currentTab, user]);
+
+  // Load clients when Clients tab is selected
+  const fetchClients = async () => {
+    setClientsLoading(true);
+    try {
+      const res = await fetch("/api/clients");
+      const data = await res.json();
+      if (res.ok) {
+        setClients(data.clients);
+      }
+    } catch (err) {
+      console.error("Failed to load clients:", err);
+    } finally {
+      setClientsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentTab === "clients") {
+      fetchClients();
+    }
+  }, [currentTab]);
 
   // Enforce role-based access control inside client
   useEffect(() => {
@@ -243,6 +282,54 @@ export default function Home() {
       setPasswordError("Connection error. Please try again.");
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const handleCreateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddClientLoading(true);
+    setAddClientError(null);
+    setAddClientSuccess(null);
+
+    try {
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: newClientFirstName,
+          lastName: newClientLastName,
+          email: newClientEmail,
+          phone: newClientPhone,
+          address: newClientAddress || undefined,
+          passportNumber: newClientPassport || undefined,
+          dateOfBirth: newClientDob || undefined,
+          source: newClientSource,
+          createdById: user?.id,
+          assignedStaffId: newClientAssignedStaffId ? Number(newClientAssignedStaffId) : undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setAddClientError(data.error || "Failed to create client");
+      } else {
+        setAddClientSuccess(`Client registered successfully! File number: ${data.client.fileNumber}`);
+        setNewClientFirstName("");
+        setNewClientLastName("");
+        setNewClientEmail("");
+        setNewClientPhone("");
+        setNewClientAddress("");
+        setNewClientPassport("");
+        setNewClientDob("");
+        setNewClientSource("walk-in");
+        setNewClientAssignedStaffId("");
+        fetchClients();
+      }
+    } catch (err) {
+      setAddClientError("Connection error. Please try again.");
+    } finally {
+      setAddClientLoading(false);
     }
   };
 
@@ -417,7 +504,7 @@ export default function Home() {
                   <h3 className="text-xl font-extrabold text-foreground">Welcome back, {user?.name}!</h3>
                   <p className="text-xs text-muted-foreground">Here is the status of your travel applications and workflows today.</p>
                 </div>
-                <button className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer">
+                <button onClick={() => setCurrentTab("clients")} className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer">
                   <Plus className="h-4 w-4" /> New Client inquiry
                 </button>
               </div>
@@ -516,54 +603,239 @@ export default function Home() {
                   <p className="text-xs text-muted-foreground">Manage and filter client files and travel history.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="relative w-64">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <input
-                      type="text"
-                      placeholder="Search name, passport..."
-                      className="w-full bg-card border border-border rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all text-foreground"
-                    />
-                  </div>
-                  <button className="bg-card border border-border text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 text-foreground hover:bg-secondary">
-                    <Filter className="h-3.5 w-3.5" /> Filters
+                  <button
+                    onClick={() => {
+                      setIsAddClientOpen(true);
+                      setAddClientError(null);
+                      setAddClientSuccess(null);
+                    }}
+                    className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer"
+                  >
+                    <UserPlus className="h-4 w-4" /> Register Client
                   </button>
                 </div>
               </div>
 
-              {/* Client List Empty State / Mockup */}
+              {/* Add Client Modal */}
+              {isAddClientOpen && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                  <div className="bg-card border border-border w-full max-w-lg rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
+                      <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                        <UserPlus className="h-4 w-4 text-primary" /> Register New Client
+                      </h4>
+                      <button
+                        onClick={() => setIsAddClientOpen(false)}
+                        className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleCreateClient} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                      {addClientError && (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+                          {addClientError}
+                        </div>
+                      )}
+                      {addClientSuccess && (
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-xs font-semibold text-green-600">
+                          {addClientSuccess}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">First Name *</label>
+                          <input
+                            type="text"
+                            required
+                            value={newClientFirstName}
+                            onChange={(e) => setNewClientFirstName(e.target.value)}
+                            placeholder="John"
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Last Name *</label>
+                          <input
+                            type="text"
+                            required
+                            value={newClientLastName}
+                            onChange={(e) => setNewClientLastName(e.target.value)}
+                            placeholder="Doe"
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Email *</label>
+                          <input
+                            type="email"
+                            required
+                            value={newClientEmail}
+                            onChange={(e) => setNewClientEmail(e.target.value)}
+                            placeholder="client@email.com"
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Phone *</label>
+                          <input
+                            type="text"
+                            required
+                            value={newClientPhone}
+                            onChange={(e) => setNewClientPhone(e.target.value)}
+                            placeholder="+1234567890"
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Address</label>
+                        <input
+                          type="text"
+                          value={newClientAddress}
+                          onChange={(e) => setNewClientAddress(e.target.value)}
+                          placeholder="123 Main Street, City"
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Passport Number</label>
+                          <input
+                            type="text"
+                            value={newClientPassport}
+                            onChange={(e) => setNewClientPassport(e.target.value)}
+                            placeholder="A12345678"
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Date of Birth</label>
+                          <input
+                            type="date"
+                            value={newClientDob}
+                            onChange={(e) => setNewClientDob(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Source *</label>
+                          <select
+                            value={newClientSource}
+                            onChange={(e) => setNewClientSource(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            <option value="walk-in">Walk-in</option>
+                            <option value="phone">Phone</option>
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="referral">Referral</option>
+                            <option value="website">Website</option>
+                            <option value="social-media">Social Media</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Assign Staff</label>
+                          <select
+                            value={newClientAssignedStaffId}
+                            onChange={(e) => setNewClientAssignedStaffId(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            <option value="">Unassigned</option>
+                            {staffUsers.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name} ({s.role})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={addClientLoading}
+                        className="w-full bg-primary text-primary-foreground font-semibold rounded-xl py-2.5 text-xs hover:opacity-95 shadow-md shadow-primary/10 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {addClientLoading ? (
+                          <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          "Register Client"
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Client List Table */}
               <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
-                      <th className="py-3.5 px-6">File Number</th>
-                      <th className="py-3.5 px-6">Client Name</th>
-                      <th className="py-3.5 px-6">Passport</th>
-                      <th className="py-3.5 px-6">Active Cases</th>
-                      <th className="py-3.5 px-6 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60 text-xs">
-                    {[
-                      { file: "WP-2026-001", name: "Samantha Cooper", passport: "AA8273940", cases: "UK Visa - Inquiry" },
-                      { file: "WP-2026-002", name: "David Miller", passport: "BB9281729", cases: "Canada Study Permit - Quality Review" },
-                      { file: "WP-2026-003", name: "Alice Green", passport: "CC1928374", cases: "Schengen Tourist - Submission" }
-                    ].map((c, idx) => (
-                      <tr key={idx} className="hover:bg-muted/10 transition-colors">
-                        <td className="py-3.5 px-6 font-mono font-bold text-foreground">{c.file}</td>
-                        <td className="py-3.5 px-6 font-semibold text-foreground">{c.name}</td>
-                        <td className="py-3.5 px-6 text-muted-foreground">{c.passport}</td>
-                        <td className="py-3.5 px-6">
-                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
-                            {c.cases}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-6 text-right">
-                          <button className="text-primary hover:underline font-semibold text-xs">View File</button>
-                        </td>
+                {clientsLoading ? (
+                  <div className="py-12 flex justify-center items-center">
+                    <div className="h-8 w-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : clients.length === 0 ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-muted-foreground">
+                    <Users className="h-10 w-10 mb-3 opacity-40" />
+                    <p className="text-sm font-semibold">No clients registered yet</p>
+                    <p className="text-xs mt-1">Click "Register Client" to add the first client.</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
+                        <th className="py-3.5 px-6">File Number</th>
+                        <th className="py-3.5 px-6">Client Name</th>
+                        <th className="py-3.5 px-6">Phone</th>
+                        <th className="py-3.5 px-6">Source</th>
+                        <th className="py-3.5 px-6">Assigned Staff</th>
+                        <th className="py-3.5 px-6 text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-border/60 text-xs">
+                      {clients.map((c) => (
+                        <tr key={c.id} className="hover:bg-muted/10 transition-colors">
+                          <td className="py-3.5 px-6 font-mono font-bold text-foreground">{c.fileNumber}</td>
+                          <td className="py-3.5 px-6">
+                            <div className="flex items-center gap-2">
+                              <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-[10px] uppercase">
+                                {c.firstName.slice(0, 1)}{c.lastName.slice(0, 1)}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-foreground">{c.firstName} {c.lastName}</p>
+                                <p className="text-[10px] text-muted-foreground">{c.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-6 text-muted-foreground font-medium">{c.phone}</td>
+                          <td className="py-3.5 px-6">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary capitalize">
+                              {c.source.replace("-", " ")}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-6">
+                            {c.assignedStaff ? (
+                              <span className="text-[10px] font-semibold text-foreground">{c.assignedStaff.name}</span>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-6 text-right">
+                            <button className="text-primary hover:underline font-semibold text-xs">View File</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           )}
