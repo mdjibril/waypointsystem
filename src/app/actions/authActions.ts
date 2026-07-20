@@ -10,6 +10,8 @@ const isSupabaseConfigured = () => {
 };
 
 export async function signInAction(email: string, password: string) {
+  const cookieStore = await cookies();
+
   try {
     if (isSupabaseConfigured()) {
       const supabase = await createClient();
@@ -30,10 +32,15 @@ export async function signInAction(email: string, password: string) {
         return { error: "User authenticated in Supabase but not found in local database." };
       }
 
+      cookieStore.set("mock-auth-user", email, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      });
+
       return { user: dbUser };
     } else {
-      // Mock / Offline mode fallback
-      // Check if user exists in the Prisma database
       const dbUser = await prisma.user.findUnique({
         where: { email },
       });
@@ -42,12 +49,10 @@ export async function signInAction(email: string, password: string) {
         return { error: "Invalid credentials (offline mode: user not found in database)." };
       }
 
-      // Simple password check (accepting "password" for the seeded demo users)
       if (password !== "password" && dbUser.passwordHash !== password) {
         return { error: "Invalid password." };
       }
 
-      const cookieStore = await cookies();
       cookieStore.set("mock-auth-user", email, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",

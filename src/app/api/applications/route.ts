@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 
-// GET /api/applications - List applications (admin: all, staff: assigned clients only)
+// GET /api/applications - List applications (ADMIN: all, non-ADMIN: assigned clients only)
 export async function GET() {
   try {
     const currentUser = await getCurrentUserFromCookies();
@@ -13,7 +13,7 @@ export async function GET() {
 
     const where: any = {};
 
-    if (currentUser.role === "staff") {
+    if (currentUser.role !== "ADMIN") {
       where.client = {
         assignedStaffId: currentUser.id,
       };
@@ -119,7 +119,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    if (currentUser.role !== "admin") {
+    if (currentUser.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Only administrators can update applications" },
         { status: 403 }
