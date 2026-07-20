@@ -1,10 +1,26 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUserFromCookies } from "@/lib/auth";
 
-// GET /api/applications - List all applications
+// GET /api/applications - List applications (admin: all, staff: assigned clients only)
 export async function GET() {
   try {
+    const currentUser = await getCurrentUserFromCookies();
+
+    if (!currentUser) {
+      return NextResponse.json({ applications: [] });
+    }
+
+    const where: any = {};
+
+    if (currentUser.role === "staff") {
+      where.client = {
+        assignedStaffId: currentUser.id,
+      };
+    }
+
     const applications = await prisma.application.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       include: {
         client: { select: { id: true, fileNumber: true, firstName: true, lastName: true } },
@@ -22,9 +38,25 @@ export async function GET() {
   }
 }
 
-// POST /api/applications - Create a new application
+// POST /api/applications - Create a new application (admin only)
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUserFromCookies();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    if (currentUser.role !== "admin") {
+      return NextResponse.json(
+        { error: "Only administrators can create applications" },
+        { status: 403 }
+      );
+    }
+
     const {
       clientId,
       serviceType,
@@ -75,9 +107,25 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH /api/applications - Update an application
+// PATCH /api/applications - Update an application (admin only)
 export async function PATCH(request: Request) {
   try {
+    const currentUser = await getCurrentUserFromCookies();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    if (currentUser.role !== "admin") {
+      return NextResponse.json(
+        { error: "Only administrators can update applications" },
+        { status: 403 }
+      );
+    }
+
     const {
       id,
       serviceType,

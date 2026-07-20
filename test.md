@@ -910,3 +910,279 @@ curl -s -X POST http://localhost:3000/api/clients \
     npm run build
     ```
     Expected: "✓ Compiled successfully" with no errors.
+
+---
+
+## Task 5 — Application Database Model and API/Actions
+
+### Setup Commands
+
+```bash
+# Regenerate Prisma client
+npm run db:generate
+
+# Start dev server
+npm run dev
+```
+
+---
+
+### Test Steps
+
+1. **Prisma schema validation:**
+
+   ```bash
+   # Check the Application model is present
+   grep -A 18 "model Application" prisma/schema.prisma
+   ```
+   Expected: Application model with fields `id`, `clientId`, `serviceType`, `destinationCountry`, `travelPurpose`, `expectedTravelDate`, `currentStage` (default `CLIENT_INQUIRY`), `status` (default `NOT_STARTED`), `decisionStatus`, `assignedStaffId`, plus relations to `Client` and `User`.
+
+   ```bash
+   # Check reverse relations
+   grep -A 3 "applications" prisma/schema.prisma
+   ```
+   Expected: `applications Application[]` on the Client model and `applications Application[] @relation("ApplicationAssignedStaff")` on the User model.
+
+   ```bash
+   npm run db:generate
+   ```
+   Expected: Completes with "✔ Generated Prisma Client" and no errors.
+
+2. **Migration file exists:**
+
+   ```bash
+   cat prisma/migrations/20260720000001_add_applications/migration.sql
+   ```
+   Expected: SQL creating `applications` table, foreign keys to `clients(id)` and `users(id)`.
+
+3. **API — GET /api/applications:**
+
+   ```bash
+   curl -s http://localhost:3000/api/applications | jq
+   ```
+   Expected: Returns 200 with `{ applications: [] }`. Each app includes nested `client` (id, fileNumber, firstName, lastName) and `assignedStaff` objects. Results ordered by `createdAt` descending.
+
+4. **API — POST /api/applications (create):**
+
+   ```bash
+   # First create a test client
+   curl -s -X POST http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -d '{
+       "firstName": "AppTest", "lastName": "Client", "email": "apptest@example.com",
+       "phone": "+5555555555", "source": "website", "createdById": 1
+     }' | jq
+   ```
+
+   ```bash
+   # Create application linking to the client (use the client id from above)
+   curl -s -X POST http://localhost:3000/api/applications \
+     -H "Content-Type: application/json" \
+     -d '{
+       "clientId": 1,
+       "serviceType": "UK Tourist Visa",
+       "destinationCountry": "United Kingdom",
+       "travelPurpose": "Tourism"
+     }' | jq
+   ```
+   Expected: Returns 201. `currentStage` defaults to `CLIENT_INQUIRY`, `status` defaults to `NOT_STARTED`.
+
+   ```bash
+   # Try with non-existent client
+   curl -s -X POST http://localhost:3000/api/applications \
+     -H "Content-Type: application/json" \
+     -d '{
+       "clientId": 9999,
+       "serviceType": "UK Tourist Visa",
+       "destinationCountry": "UK",
+       "travelPurpose": "Tourism"
+     }' | jq
+   ```
+   Expected: Returns 404 with `{ error: "Client not found" }`.
+
+   ```bash
+   # Missing required fields
+   curl -s -X POST http://localhost:3000/api/applications \
+     -H "Content-Type: application/json" \
+     -d '{"clientId": 1}' | jq
+   ```
+   Expected: Returns 400 with descriptive error.
+
+5. **API — POST /api/applications (with optional fields):**
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/applications \
+     -H "Content-Type: application/json" \
+     -d '{
+       "clientId": 1,
+       "serviceType": "Canada Study Permit",
+       "destinationCountry": "Canada",
+       "travelPurpose": "Study",
+       "expectedTravelDate": "2026-09-01T00:00:00.000Z",
+       "assignedStaffId": 2
+     }' | jq
+   ```
+   Expected: Returns 201. `expectedTravelDate` stored as timestamp, `assignedStaff` nested object present.
+
+6. **API — PATCH /api/applications (update):**
+
+   ```bash
+   # Update stage
+   curl -s -X PATCH http://localhost:3000/api/applications \
+     -H "Content-Type: application/json" \
+     -d '{"id": 1, "currentStage": "INITIAL_CONSULTATION", "status": "IN_PROGRESS"}' | jq
+   ```
+   Expected: Returns 200. Stage and status updated.
+
+   ```bash
+   # Update decision status
+   curl -s -X PATCH http://localhost:3000/api/applications \
+     -H "Content-Type: application/json" \
+     -d '{"id": 1, "decisionStatus": "APPROVED"}' | jq
+   ```
+   Expected: Returns 200. `decisionStatus` set to `APPROVED`.
+
+   ```bash
+   # Clear assigned staff
+   curl -s -X PATCH http://localhost:3000/api/applications \
+     -H "Content-Type: application/json" \
+     -d '{"id": 1, "assignedStaffId": null}' | jq
+   ```
+   Expected: Returns 200. `assignedStaff` is now `null`.
+
+   ```bash
+   # Missing id
+   curl -s -X PATCH http://localhost:3000/api/applications \
+     -H "Content-Type: application/json" \
+     -d '{"currentStage": "QUALITY_REVIEW"}' | jq
+   ```
+   Expected: Returns 400 with `{ error: "Application ID is required" }`.
+
+7. **Server action — getApplicationsAction:**
+
+   ```typescript
+   import { getApplicationsAction } from "@/app/actions/applicationActions";
+   const { applications } = await getApplicationsAction();
+   ```
+
+8. **Server action — createApplicationAction:**
+
+   ```typescript
+   import { createApplicationAction } from "@/app/actions/applicationActions";
+
+   const { application } = await createApplicationAction({
+     clientId: 1,
+     serviceType: "Schengen Tourist Visa",
+     destinationCountry: "France",
+     travelPurpose: "Tourism",
+     assignedStaffId: 2,
+   });
+   // application.currentStage === "CLIENT_INQUIRY"
+   // application.status === "NOT_STARTED"
+   ```
+
+9. **Server action — updateApplicationAction:**
+
+   ```typescript
+   import { updateApplicationAction } from "@/app/actions/applicationActions";
+
+   const { application } = await updateApplicationAction(1, {
+     currentStage: "DOCUMENT_COLLECTION_VERIFICATION",
+     status: "IN_PROGRESS",
+   });
+   ```
+
+10. **Build verification:**
+
+    ```bash
+    npm run build
+    ```
+    Expected: "✓ Compiled successfully". `/api/applications` appears as a dynamic route (ƒ).
+
+---
+
+## Task 6 — Application Creation Form
+
+### Setup Commands
+
+```bash
+# Start the dev server
+npm run dev
+
+# Ensure we have test clients and staff
+curl -s http://localhost:3000/api/clients | jq '.clients | length'
+curl -s http://localhost:3000/api/staff | jq '.users | length'
+
+# Log in at http://localhost:3000 as admin
+```
+
+---
+
+### Test Steps
+
+1. **Applications tab in Sidebar:**
+
+   - Log in as admin or staff — "Applications" appears in the sidebar between Clients and Tasks.
+   - Click "Applications" — the Applications page loads with header "Applications".
+
+2. **Opening the creation modal:**
+
+   - Click "New Application" button — modal appears with heading "New Application".
+   - Modal has "Cancel" button.
+
+3. **Application form fields:**
+
+   - Client * (dropdown showing all clients as "WP-XXXX-YYYY — FirstName LastName")
+   - Service Type * (dropdown: UK Tourist Visa, Canada Study Permit, Schengen Tourist Visa, USA B1/B2 Visa, Australia Visitor Visa, UK Student Visa)
+   - Destination Country * (text input)
+   - Travel Purpose * (dropdown: Tourism, Business, Study, Work, Family Visit, Medical, Transit, Other)
+   - Expected Travel Date (date picker, optional)
+   - Assign Staff (dropdown with all staff members, default "Unassigned")
+
+   Fields marked * are required.
+
+4. **Submit with required fields:**
+
+   - Select a client, choose "UK Tourist Visa", enter "United Kingdom" as destination, select "Tourism" as purpose.
+   - Click "Create Application" — loading spinner shows.
+   - Success message: "Application created successfully!"
+   - New application row appears in the table.
+
+5. **Client field populated correctly:**
+
+   ```bash
+   curl -s http://localhost:3000/api/clients | jq '.clients'
+   ```
+   - Every client in the database appears as an option in the Client dropdown.
+   - Format: `WP-2026-0001 — John Doe`.
+
+6. **Applications table — live data:**
+
+   - After creating applications, table shows: Client (name + file number), Service Type, Destination, Stage (badge), Status (color-coded badge), Actions.
+   - Stage default shows "CLIENT INQUIRY" (underscores replaced with spaces).
+   - Status "NOT STARTED" shows in muted color.
+   - Status "IN PROGRESS" shows in blue.
+   - Status "BLOCKED" shows in red.
+   - Status "COMPLETED" shows in green.
+
+7. **Loading and empty states:**
+
+   - When switching to Applications tab, a spinner appears while data loads.
+   - When no applications exist, empty state shows a file icon and message.
+
+8. **Backend validation:**
+
+   ```bash
+   # Submit without clientId
+   curl -s -X POST http://localhost:3000/api/applications \
+     -H "Content-Type: application/json" \
+     -d '{"serviceType": "UK Tourist Visa", "destinationCountry": "UK", "travelPurpose": "Tourism"}' | jq
+   ```
+   Expected: Returns 400 with `{ error: "Client ID, service type, destination country, and travel purpose are required" }`.
+
+9. **Build verification:**
+
+    ```bash
+    npm run build
+    ```
+    Expected: "✓ Compiled successfully" with no errors.

@@ -1,10 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUserFromCookies } from "@/lib/auth";
 
-// GET /api/clients - List all clients
+// GET /api/clients - List clients (admin: all, staff: assigned only)
 export async function GET() {
   try {
+    const currentUser = await getCurrentUserFromCookies();
+
+    if (!currentUser) {
+      return NextResponse.json({ clients: [] });
+    }
+
+    const where: any = {};
+
+    if (currentUser.role === "staff") {
+      where.assignedStaffId = currentUser.id;
+    }
+
     const clients = await prisma.client.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
@@ -22,9 +36,25 @@ export async function GET() {
   }
 }
 
-// POST /api/clients - Create a new client
+// POST /api/clients - Create a new client (admin only)
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUserFromCookies();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    if (currentUser.role !== "admin") {
+      return NextResponse.json(
+        { error: "Only administrators can create clients" },
+        { status: 403 }
+      );
+    }
+
     const {
       firstName,
       lastName,
@@ -80,9 +110,25 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH /api/clients - Update a client
+// PATCH /api/clients - Update a client (admin only)
 export async function PATCH(request: Request) {
   try {
+    const currentUser = await getCurrentUserFromCookies();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    if (currentUser.role !== "admin") {
+      return NextResponse.json(
+        { error: "Only administrators can update clients" },
+        { status: 403 }
+      );
+    }
+
     const {
       id,
       firstName,

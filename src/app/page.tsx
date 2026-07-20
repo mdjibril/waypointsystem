@@ -713,6 +713,7 @@ export default function Home() {
                   <p className="text-xs text-muted-foreground">Manage and filter client files and travel history.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                  {user?.role === "ADMIN" && (
                   <button
                     onClick={() => {
                       setIsAddClientOpen(true);
@@ -723,6 +724,7 @@ export default function Home() {
                   >
                     <UserPlus className="h-4 w-4" /> Register Client
                   </button>
+                  )}
                 </div>
               </div>
 
@@ -1065,9 +1067,11 @@ export default function Home() {
                       </span>
                     </div>
                   </div>
+                  {user?.role === "ADMIN" && (
                   <button className="bg-card border border-border text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-foreground hover:bg-secondary transition-all cursor-pointer">
                     <Edit className="h-3.5 w-3.5" /> Edit Profile
                   </button>
+                  )}
                 </div>
               </div>
 
@@ -1174,6 +1178,7 @@ export default function Home() {
                   <h3 className="text-lg font-bold text-foreground">Applications</h3>
                   <p className="text-xs text-muted-foreground">Track visa and travel service applications linked to client files.</p>
                 </div>
+                {user?.role === "ADMIN" && (
                 <button
                   onClick={() => {
                     setIsAddAppOpen(true);
@@ -1184,6 +1189,7 @@ export default function Home() {
                 >
                   <Plus className="h-4 w-4" /> New Application
                 </button>
+                )}
               </div>
 
               {/* New Application Modal */}
