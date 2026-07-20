@@ -558,3 +558,134 @@ npm run db:studio
     npm run build
     ```
     Expected: "✓ Compiled successfully", "✓ Generating static pages", and `/api/clients` appears with the `ƒ` (Dynamic) marker in the route list.
+
+---
+
+## Task 2 — Client Registration Form
+
+### Setup Commands
+
+```bash
+# Start the dev server (required for form testing)
+npm run dev
+
+# Open the app in a browser
+# Navigate to http://localhost:3000 and log in as admin
+```
+
+---
+
+### Test Steps
+
+1. **Clients tab navigation:**
+
+   - Log in as admin (`admin@waypoint.com` / `password123`).
+   - Click "Clients" in the Sidebar — the Client Records page loads.
+   - Header shows "Client Records" with description "Manage and filter client files and travel history."
+   - A "Register Client" button is visible in the top-right area.
+
+2. **Opening the registration modal:**
+
+   - Click "Register Client" — a modal overlay appears with the heading "Register New Client".
+   - The modal has a "Cancel" button in the top-right corner.
+   - Clicking "Cancel" closes the modal and clears the form.
+
+3. **Registration form fields:**
+
+   The modal contains all required and optional fields matching the Client model:
+
+   - First Name * (text input, placeholder "John")
+   - Last Name * (text input, placeholder "Doe")
+   - Email * (email input, placeholder "client@email.com")
+   - Phone * (text input, placeholder "+1234567890")
+   - Address (text input, placeholder "123 Main Street, City")
+   - Passport Number (text input, placeholder "A12345678")
+   - Date of Birth (date picker)
+   - Source * (dropdown with options: Walk-in, Phone, WhatsApp, Referral, Website, Social Media)
+   - Assign Staff (dropdown with all staff members from database, default: "Unassigned")
+
+   Fields marked with * are required and use `required` attribute with browser validation.
+
+4. **Submit with required fields only:**
+
+   ```bash
+   # Create a client via the API to verify form submission end-to-end
+   curl -s -X POST http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -d '{
+       "firstName": "Test",
+       "lastName": "Client",
+       "email": "testclient@example.com",
+       "phone": "+1111111111",
+       "source": "website",
+       "createdById": 1
+     }' | jq
+   ```
+   Expected: Returns 201 with auto-generated `fileNumber` (e.g., `WP-2026-XXXX`).
+
+   **UI verification:**
+   - Fill in First Name: "Test", Last Name: "Client", Email, Phone, select Source.
+   - Leave optional fields blank.
+   - Click "Register Client" — loading spinner shows on button.
+   - Success message: "Client registered successfully! File number: WP-2026-XXXX".
+   - The new client appears immediately in the table below.
+
+5. **Submit with all fields including optional:**
+
+   - Fill in all fields including Address, Passport Number, Date of Birth, and Assign Staff.
+   - Click "Register Client" — success message appears.
+   - New client row shows in table with the assigned staff member's name.
+
+6. **Client list table — live data:**
+
+   - After registering clients, the table shows them in descending order by creation date.
+   - Columns: File Number (monospace), Client Name (with avatar + email), Phone, Source (badge), Assigned Staff, Actions.
+   - The source badge is styled with primary color and capitalized text.
+   - "View File" button appears in the Actions column for each row.
+
+7. **Client list table — loading state:**
+
+   - Navigate away from Clients tab and back — the table briefly shows a spinner while fetching data.
+
+8. **Client list table — empty state:**
+
+   - If no clients exist in the database:
+     - A user icon is displayed.
+     - Text: "No clients registered yet".
+     - Subtext: "Click 'Register Client' to add the first client."
+
+9. **Dashboard "New Client inquiry" CTA:**
+
+   - On the Dashboard tab, click the "New Client inquiry" button in the header.
+   - Should navigate to the Clients tab.
+   - From there, "Register Client" opens the registration modal.
+
+10. **Form validation:**
+
+    - Submit the form with the email field empty — browser native validation prevents submission and shows "Please fill out this field."
+    - The form uses `required` attribute on First Name, Last Name, Email, Phone, and Source.
+
+11. **Error handling — duplicate or server error:**
+
+    ```bash
+    # Test API error handling that the form would display
+    curl -s -X POST http://localhost:3000/api/clients \
+      -H "Content-Type: application/json" \
+      -d '{"firstName": "NoRequired"}' | jq
+    ```
+    Expected: Returns 400 with error message.
+
+    - In the UI, any API error displays as a red banner inside the modal.
+
+12. **Staff dropdown populated:**
+
+    The "Assign Staff" dropdown lists all users from the database (fetched from `/api/staff`).
+    Each option shows: `Name (role)` — e.g., `Admin User (admin)`.
+    Selecting "Unassigned" (empty value) leaves the client without an assigned staff member.
+
+13. **Build verification:**
+
+    ```bash
+    npm run build
+    ```
+    Expected: "✓ Compiled successfully" with no errors.

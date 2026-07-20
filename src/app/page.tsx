@@ -75,6 +75,11 @@ export default function Home() {
   const [addClientSuccess, setAddClientSuccess] = useState<string | null>(null);
   const [addClientLoading, setAddClientLoading] = useState(false);
 
+  // Client Search & Filter State
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientFilterSource, setClientFilterSource] = useState("all");
+  const [clientFilterStaff, setClientFilterStaff] = useState("all");
+
   // Sync profile fields when user is loaded
   useEffect(() => {
     if (user) {
@@ -616,6 +621,58 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Search & Filter Bar */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative flex-1 min-w-[200px] max-w-md">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, email, file number, or passport..."
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    className="w-full bg-card border border-border rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all text-foreground"
+                  />
+                </div>
+                <select
+                  value={clientFilterSource}
+                  onChange={(e) => setClientFilterSource(e.target.value)}
+                  className="bg-card border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                >
+                  <option value="all">All Sources</option>
+                  <option value="walk-in">Walk-in</option>
+                  <option value="phone">Phone</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="referral">Referral</option>
+                  <option value="website">Website</option>
+                  <option value="social-media">Social Media</option>
+                </select>
+                <select
+                  value={clientFilterStaff}
+                  onChange={(e) => setClientFilterStaff(e.target.value)}
+                  className="bg-card border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                >
+                  <option value="all">All Staff</option>
+                  <option value="unassigned">Unassigned</option>
+                  {staffUsers.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                {(clientSearch || clientFilterSource !== "all" || clientFilterStaff !== "all") && (
+                  <button
+                    onClick={() => {
+                      setClientSearch("");
+                      setClientFilterSource("all");
+                      setClientFilterStaff("all");
+                    }}
+                    className="text-[10px] text-muted-foreground hover:text-foreground font-semibold underline cursor-pointer"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+
               {/* Add Client Modal */}
               {isAddClientOpen && (
                 <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
@@ -788,7 +845,40 @@ export default function Home() {
                     <p className="text-sm font-semibold">No clients registered yet</p>
                     <p className="text-xs mt-1">Click "Register Client" to add the first client.</p>
                   </div>
-                ) : (
+                ) : (() => {
+                  const filteredClients = clients.filter((c: any) => {
+                    const search = clientSearch.toLowerCase();
+                    if (search) {
+                      const fullName = `${c.firstName} ${c.lastName}`.toLowerCase();
+                      const matchesSearch =
+                        fullName.includes(search) ||
+                        c.email.toLowerCase().includes(search) ||
+                        c.fileNumber.toLowerCase().includes(search) ||
+                        (c.passportNumber && c.passportNumber.toLowerCase().includes(search));
+                      if (!matchesSearch) return false;
+                    }
+                    if (clientFilterSource !== "all" && c.source !== clientFilterSource) return false;
+                    if (clientFilterStaff === "unassigned" && c.assignedStaff) return false;
+                    if (
+                      clientFilterStaff !== "all" &&
+                      clientFilterStaff !== "unassigned" &&
+                      (!c.assignedStaff || String(c.assignedStaff.id) !== clientFilterStaff)
+                    )
+                      return false;
+                    return true;
+                  });
+
+                  if (filteredClients.length === 0) {
+                    return (
+                      <div className="py-12 flex flex-col items-center justify-center text-muted-foreground">
+                        <Search className="h-10 w-10 mb-3 opacity-40" />
+                        <p className="text-sm font-semibold">No clients match your filters</p>
+                        <p className="text-xs mt-1">Try adjusting your search or filter criteria.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
@@ -801,7 +891,7 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60 text-xs">
-                      {clients.map((c) => (
+                      {filteredClients.map((c: any) => (
                         <tr key={c.id} className="hover:bg-muted/10 transition-colors">
                           <td className="py-3.5 px-6 font-mono font-bold text-foreground">{c.fileNumber}</td>
                           <td className="py-3.5 px-6">
@@ -835,7 +925,8 @@ export default function Home() {
                       ))}
                     </tbody>
                   </table>
-                )}
+                  );
+                })()}
               </div>
             </div>
           )}
