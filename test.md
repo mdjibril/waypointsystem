@@ -689,3 +689,224 @@ npm run dev
     npm run build
     ```
     Expected: "✓ Compiled successfully" with no errors.
+
+---
+
+## Task 3 — Client List with Search and Filters
+
+### Setup Commands
+
+```bash
+# Start the dev server
+npm run dev
+
+# Register test clients via API (so we have data to search/filter)
+curl -s -X POST http://localhost:3000/api/clients \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "Samantha", "lastName": "Cooper", "email": "samantha@example.com",
+    "phone": "+1111111111", "source": "website", "createdById": 1
+  }' | jq
+
+curl -s -X POST http://localhost:3000/api/clients \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "David", "lastName": "Miller", "email": "david@example.com",
+    "phone": "+2222222222", "source": "referral", "createdById": 1, "assignedStaffId": 2
+  }' | jq
+
+curl -s -X POST http://localhost:3000/api/clients \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "Alice", "lastName": "Green", "email": "alice@example.com",
+    "phone": "+3333333333", "source": "walk-in", "createdById": 1, "passportNumber": "CC1928374"
+  }' | jq
+
+# Log in at http://localhost:3000 and navigate to the Clients tab
+```
+
+---
+
+### Test Steps
+
+1. **Search bar is visible:**
+
+   - On the Clients tab, a search input is visible below the header with placeholder text: "Search by name, email, file number, or passport..."
+   - A search icon is positioned inside the input on the left.
+
+2. **Filter dropdowns are visible:**
+
+   - A "All Sources" dropdown is positioned next to the search bar.
+   - An "All Staff" dropdown is positioned next to the source filter.
+   - No "Clear filters" link is visible when all values are at their defaults.
+
+3. **Search by name:**
+
+   ```bash
+   # Verify via API that the client exists
+   curl -s http://localhost:3000/api/clients | jq '.clients[] | select(.firstName == "Samantha")'
+   ```
+   Expected: Returns the Samantha Cooper client record.
+
+   - In the UI, type "Samantha" into the search bar — only Samantha Cooper's row is shown.
+   - Type "david" — only David Miller's row is shown.
+   - Type a partial match like "sam" — Samantha Cooper is shown.
+   - Type "zzzz" — the table shows an empty state with "No clients match your filters" and a search icon.
+
+4. **Search by email:**
+
+   - Type "alice@example.com" — only Alice Green's row is shown.
+
+5. **Search by file number:**
+
+   - Type the file number of a client (e.g., "WP-2026-0001") — only that client is shown.
+
+6. **Search by passport number:**
+
+   - Type "CC1928374" — only Alice Green's row is shown (since she has that passport number).
+
+7. **Source filter:**
+
+   - Select "Website" from the source filter — only clients with source "website" are shown.
+   - Select "Referral" — only David Miller is shown.
+   - Select "Walk-in" — only Alice Green is shown.
+
+8. **Staff filter:**
+
+   - Select a staff member from the staff filter — only clients assigned to that staff member are shown.
+   - Select "Unassigned" — only clients with no assigned staff are shown.
+   - Select "All Staff" — all clients are shown again.
+
+9. **Combined search and filters:**
+
+   - Set Source to "Website" and type "Cooper" in search — Samantha Cooper is shown.
+   - Set Staff to "Unassigned" and type "david" — no results (David has a staff assigned).
+   - The filters work together with AND logic.
+
+10. **Clear filters:**
+
+    - After applying any search term or filter, a "Clear filters" link appears.
+    - Click "Clear filters" — the search bar is emptied, both dropdowns reset to "All Sources" / "All Staff", and all clients are shown.
+    - The "Clear filters" link disappears.
+
+11. **Filter empty state:**
+
+    - Apply a combination of filters and search that matches no clients.
+    - A search icon is shown with text: "No clients match your filters".
+    - Subtext: "Try adjusting your search or filter criteria."
+
+12. **Build verification:**
+
+    ```bash
+    npm run build
+    ```
+    Expected: "✓ Compiled successfully" with no errors.
+
+---
+
+## Task 4 — Client Profile Page
+
+### Setup Commands
+
+```bash
+# Start the dev server
+npm run dev
+
+# Ensure we have at least one client in the database with all fields
+curl -s -X POST http://localhost:3000/api/clients \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "Profile", "lastName": "Test", "email": "profiletest@example.com",
+    "phone": "+9999999999", "address": "456 Oak Avenue, Lagos",
+    "passportNumber": "B98765432", "dateOfBirth": "1985-08-20T00:00:00.000Z",
+    "source": "phone", "createdById": 1, "assignedStaffId": 2
+  }' | jq
+
+# Log in at http://localhost:3000 and navigate to the Clients tab
+```
+
+---
+
+### Test Steps
+
+1. **Accessing client profile:**
+
+   - On the Clients tab, find a client in the table.
+   - Click the "View File" button in the Actions column.
+   - The client list is replaced by the client profile view.
+   - A loading spinner briefly appears while the data loads.
+
+2. **Back to Client List:**
+
+   - The profile page has a "← Back to Client List" button at the top.
+   - Click it — the client list table reappears with the selected client cleared.
+
+3. **Profile header:**
+
+   - A large avatar shows the client's initials (first letter of first name + first letter of last name).
+   - Full name displayed in large bold text (first name + last name).
+   - File number shown in monospace font with primary color.
+   - Source displayed as a badge (capitalized, e.g., "Phone").
+   - "Edit Profile" button visible in the top-right corner.
+
+4. **Contact Information card:**
+
+   - Card heading: "Contact Information" with a mail icon.
+   - Email row: displays the client's email address.
+   - Phone row: displays the client's phone number.
+   - Address row: displays the client's address, or "—" if empty.
+
+5. **Personal Details card:**
+
+   - Card heading: "Personal Details" with a user icon.
+   - Passport Number row: displays the passport number, or "—" if empty.
+   - Date of Birth row: displays the date formatted as "20 August 1985", or "—" if empty.
+   - Assigned Staff row: displays the assigned staff member's name, or "Unassigned" if none.
+
+6. **Record Details footer:**
+
+   - Card heading: "Record Details".
+   - Created By: shows the name of the staff who created the client record.
+   - Created At: shows the formatted date the client was registered.
+   - Last Updated: shows the formatted date of the last update.
+   - Client ID: shown in monospace with a `#` prefix (e.g., `#3`).
+
+7. **All fields populated correctly:**
+
+   ```bash
+   # Verify the profile data matches what's in the database
+   curl -s http://localhost:3000/api/clients | jq '.clients[] | select(.email == "profiletest@example.com")'
+   ```
+   Expected: All fields from the profile view (name, email, phone, address, passport, DOB, source, staff) match the API response.
+
+8. **Empty optional fields:**
+
+   ```bash
+   # Create a client with only required fields
+   curl -s -X POST http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -d '{
+       "firstName": "Minimal", "lastName": "Client", "email": "minimal@example.com",
+       "phone": "+0000000000", "source": "walk-in", "createdById": 1
+     }' | jq
+   ```
+   - View the profile of the new "Minimal Client".
+   - Address, Passport Number, and Date of Birth should show "—".
+   - Assigned Staff should show "Unassigned".
+
+9. **Switch between profiles:**
+
+   - View a client's profile, then click "Back to Client List".
+   - Click "View File" on a different client — the new client's details load correctly.
+   - No stale data from the previous profile is shown.
+
+10. **Loading state:**
+
+    - View a profile (or switch between them) — a centered spinner appears while the data is being fetched.
+
+11. **Build verification:**
+
+    ```bash
+    npm run build
+    ```
+    Expected: "✓ Compiled successfully" with no errors.
