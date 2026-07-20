@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (currentUser.role !== "admin") {
+    if (currentUser.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Only administrators can create clients" },
         { status: 403 }
