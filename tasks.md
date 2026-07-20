@@ -74,7 +74,7 @@ Merge order:
 | [x] Build client registration form | Developer 2 | `feature/client-registration` | Client model, UI shell |
 | [x] Build client list with search and filters | Developer 2 | `feature/client-list` | Client registration |
 | [x] Build client profile page | Developer 2 | `feature/client-profile` | Client list |
-| [ ] Create application database model linked to client | Developer 2 | `feature/application-model` | Client model |
+| [x] Create application database model linked to client | Developer 2 | `feature/application-model` | Client model |
 | [ ] Build application creation form | Developer 2 | `feature/application-create` | Application model |
 | [ ] Add admin visibility for all clients and staff visibility for assigned clients | Developer 1 | `feature/client-permissions` | Role protection, client profile |
 

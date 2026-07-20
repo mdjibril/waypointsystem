@@ -90,6 +90,20 @@ export default function Home() {
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [clientProfileLoading, setClientProfileLoading] = useState(false);
 
+  // Application State
+  const [applications, setApplications] = useState<any[]>([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
+  const [isAddAppOpen, setIsAddAppOpen] = useState(false);
+  const [newAppClientId, setNewAppClientId] = useState("");
+  const [newAppServiceType, setNewAppServiceType] = useState("UK Tourist Visa");
+  const [newAppDestination, setNewAppDestination] = useState("");
+  const [newAppPurpose, setNewAppPurpose] = useState("");
+  const [newAppTravelDate, setNewAppTravelDate] = useState("");
+  const [newAppStaffId, setNewAppStaffId] = useState("");
+  const [addAppError, setAddAppError] = useState<string | null>(null);
+  const [addAppSuccess, setAddAppSuccess] = useState<string | null>(null);
+  const [addAppLoading, setAddAppLoading] = useState(false);
+
   // Sync profile fields when user is loaded
   useEffect(() => {
     if (user) {
@@ -157,6 +171,70 @@ export default function Home() {
       console.error("Failed to load client profile:", err);
     } finally {
       setClientProfileLoading(false);
+    }
+  };
+
+  // Load applications when Applications tab is selected
+  const fetchApplications = async () => {
+    setApplicationsLoading(true);
+    try {
+      const res = await fetch("/api/applications");
+      const data = await res.json();
+      if (res.ok) {
+        setApplications(data.applications);
+      }
+    } catch (err) {
+      console.error("Failed to load applications:", err);
+    } finally {
+      setApplicationsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentTab === "applications") {
+      fetchApplications();
+      if (clients.length === 0) fetchClients();
+    }
+  }, [currentTab]);
+
+  const handleCreateApplication = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddAppLoading(true);
+    setAddAppError(null);
+    setAddAppSuccess(null);
+
+    try {
+      const res = await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: Number(newAppClientId),
+          serviceType: newAppServiceType,
+          destinationCountry: newAppDestination,
+          travelPurpose: newAppPurpose,
+          expectedTravelDate: newAppTravelDate || undefined,
+          assignedStaffId: newAppStaffId ? Number(newAppStaffId) : undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setAddAppError(data.error || "Failed to create application");
+      } else {
+        setAddAppSuccess("Application created successfully!");
+        setNewAppClientId("");
+        setNewAppServiceType("UK Tourist Visa");
+        setNewAppDestination("");
+        setNewAppPurpose("");
+        setNewAppTravelDate("");
+        setNewAppStaffId("");
+        fetchApplications();
+      }
+    } catch (err) {
+      setAddAppError("Connection error. Please try again.");
+    } finally {
+      setAddAppLoading(false);
     }
   };
 
@@ -1088,6 +1166,225 @@ export default function Home() {
               </div>
             </div>
           ) : null}
+
+          {currentTab === "applications" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="flex justify-between items-center flex-wrap gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">Applications</h3>
+                  <p className="text-xs text-muted-foreground">Track visa and travel service applications linked to client files.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsAddAppOpen(true);
+                    setAddAppError(null);
+                    setAddAppSuccess(null);
+                  }}
+                  className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" /> New Application
+                </button>
+              </div>
+
+              {/* New Application Modal */}
+              {isAddAppOpen && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                  <div className="bg-card border border-border w-full max-w-lg rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
+                      <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-primary" /> New Application
+                      </h4>
+                      <button
+                        onClick={() => setIsAddAppOpen(false)}
+                        className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleCreateApplication} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                      {addAppError && (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+                          {addAppError}
+                        </div>
+                      )}
+                      {addAppSuccess && (
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-xs font-semibold text-green-600">
+                          {addAppSuccess}
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Client *</label>
+                        <select
+                          required
+                          value={newAppClientId}
+                          onChange={(e) => setNewAppClientId(e.target.value)}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        >
+                          <option value="">Select a client...</option>
+                          {clients.map((c: any) => (
+                            <option key={c.id} value={c.id}>
+                              {c.fileNumber} — {c.firstName} {c.lastName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Service Type *</label>
+                        <select
+                          required
+                          value={newAppServiceType}
+                          onChange={(e) => setNewAppServiceType(e.target.value)}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        >
+                          <option value="UK Tourist Visa">UK Tourist Visa</option>
+                          <option value="Canada Study Permit">Canada Study Permit</option>
+                          <option value="Schengen Tourist Visa">Schengen Tourist Visa</option>
+                          <option value="USA B1/B2 Visa">USA B1/B2 Visa</option>
+                          <option value="Australia Visitor Visa">Australia Visitor Visa</option>
+                          <option value="UK Student Visa">UK Student Visa</option>
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Destination Country *</label>
+                          <input
+                            type="text"
+                            required
+                            value={newAppDestination}
+                            onChange={(e) => setNewAppDestination(e.target.value)}
+                            placeholder="United Kingdom"
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Travel Purpose *</label>
+                          <select
+                            required
+                            value={newAppPurpose}
+                            onChange={(e) => setNewAppPurpose(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            <option value="">Select purpose...</option>
+                            <option value="Tourism">Tourism</option>
+                            <option value="Business">Business</option>
+                            <option value="Study">Study</option>
+                            <option value="Work">Work</option>
+                            <option value="Family Visit">Family Visit</option>
+                            <option value="Medical">Medical</option>
+                            <option value="Transit">Transit</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Expected Travel Date</label>
+                          <input
+                            type="date"
+                            value={newAppTravelDate}
+                            onChange={(e) => setNewAppTravelDate(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Assign Staff</label>
+                          <select
+                            value={newAppStaffId}
+                            onChange={(e) => setNewAppStaffId(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            <option value="">Unassigned</option>
+                            {staffUsers.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name} ({s.role})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={addAppLoading}
+                        className="w-full bg-primary text-primary-foreground font-semibold rounded-xl py-2.5 text-xs hover:opacity-95 shadow-md shadow-primary/10 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {addAppLoading ? (
+                          <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          "Create Application"
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Applications Table */}
+              <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+                {applicationsLoading ? (
+                  <div className="py-12 flex justify-center items-center">
+                    <div className="h-8 w-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : applications.length === 0 ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-muted-foreground">
+                    <FileText className="h-10 w-10 mb-3 opacity-40" />
+                    <p className="text-sm font-semibold">No applications yet</p>
+                    <p className="text-xs mt-1">Click "New Application" to create the first application.</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
+                        <th className="py-3.5 px-6">Client</th>
+                        <th className="py-3.5 px-6">Service Type</th>
+                        <th className="py-3.5 px-6">Destination</th>
+                        <th className="py-3.5 px-6">Stage</th>
+                        <th className="py-3.5 px-6">Status</th>
+                        <th className="py-3.5 px-6 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60 text-xs">
+                      {applications.map((app: any) => (
+                        <tr key={app.id} className="hover:bg-muted/10 transition-colors">
+                          <td className="py-3.5 px-6">
+                            <div>
+                              <p className="font-semibold text-foreground">{app.client?.firstName} {app.client?.lastName}</p>
+                              <p className="text-[10px] text-muted-foreground font-mono">{app.client?.fileNumber}</p>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-6 font-semibold text-foreground">{app.serviceType}</td>
+                          <td className="py-3.5 px-6 text-muted-foreground">{app.destinationCountry}</td>
+                          <td className="py-3.5 px-6">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
+                              {app.currentStage.replace(/_/g, " ")}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-6">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              app.status === "COMPLETED" ? "bg-green-500/10 text-green-600" :
+                              app.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
+                              app.status === "BLOCKED" ? "bg-red-500/10 text-red-600" :
+                              "bg-muted text-muted-foreground"
+                            }`}>
+                              {app.status.replace(/_/g, " ")}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-6 text-right">
+                            <button className="text-primary hover:underline font-semibold text-xs cursor-pointer">View</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
 
           {currentTab === "tasks" && (
             <div className="space-y-6 animate-in fade-in duration-200">

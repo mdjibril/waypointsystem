@@ -26,6 +26,7 @@ export function Sidebar({ currentTab, setCurrentTab }: SidebarProps) {
   const menuItems = [
     { id: "dashboard", name: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "STAFF"] },
     { id: "clients", name: "Clients", icon: Users, roles: ["ADMIN", "STAFF"] },
+    { id: "applications", name: "Applications", icon: FileText, roles: ["ADMIN", "STAFF"] },
     { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["ADMIN", "STAFF"] },
     { id: "documents", name: "Documents", icon: FileText, roles: ["ADMIN", "STAFF"] },
     { id: "payments", name: "Payments", icon: CreditCard, roles: ["ADMIN"] },
