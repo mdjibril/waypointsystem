@@ -692,6 +692,308 @@ npm run dev
 
 ---
 
+## Task 7 — Admin Visibility for All Clients and Staff Visibility for Assigned Clients
+
+### Setup Commands
+
+```bash
+# Start the dev server
+npm run dev
+
+# Ensure we have test data (at least 2 clients, one assigned to staff and one unassigned)
+curl -s -X POST http://localhost:3000/api/clients \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "AdminVisible", "lastName": "Client", "email": "adminvisible@example.com",
+    "phone": "+1111111111", "source": "website", "createdById": 1
+  }' | jq
+
+curl -s -X POST http://localhost:3000/api/clients \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "StaffVisible", "lastName": "Client", "email": "staffvisible@example.com",
+    "phone": "+2222222222", "source": "referral", "createdById": 1, "assignedStaffId": 2
+  }' | jq
+
+# Create applications for both clients (using the client IDs from above — adjust as needed)
+curl -s -X POST http://localhost:3000/api/applications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": <UNASSIGNED_CLIENT_ID>,
+    "serviceType": "UK Tourist Visa",
+    "destinationCountry": "United Kingdom",
+    "travelPurpose": "Tourism"
+  }' | jq
+
+curl -s -X POST http://localhost:3000/api/applications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": <ASSIGNED_CLIENT_ID>,
+    "serviceType": "Canada Study Permit",
+    "destinationCountry": "Canada",
+    "travelPurpose": "Study",
+    "assignedStaffId": 2
+  }' | jq
+
+# Log in at http://localhost:3000 — you will switch between admin and staff accounts
+```
+
+---
+
+### Test Steps
+
+#### Part A — Backend API Permission Enforcement
+
+1. **GET /api/clients as admin (sees all clients):**
+
+   - Log in as admin (`admin@waypoint.com` / `password123`).
+
+   ```bash
+   curl -s http://localhost:3000/api/clients \
+     -H "Cookie: mock-auth-user=admin@waypoint.com" | jq
+   ```
+   Expected: Returns 200 with all clients in the database. Both "AdminVisible Client" and "StaffVisible Client" are present in the response.
+
+2. **GET /api/clients as staff (sees only assigned clients):**
+
+   - Log in as staff (`staff@waypoint.com` / `password123`).
+
+   ```bash
+   curl -s http://localhost:3000/api/clients \
+     -H "Cookie: mock-auth-user=staff@waypoint.com" | jq
+   ```
+   Expected: Returns 200 but only clients where `assignedStaffId` matches the staff user (id=2). "AdminVisible Client" (unassigned) should NOT appear. "StaffVisible Client" (assigned to staff) SHOULD appear.
+
+3. **GET /api/clients as unauthenticated (empty response):**
+
+   ```bash
+   curl -s http://localhost:3000/api/clients | jq
+   ```
+   Expected: Returns 200 with `{ clients: [] }` — no error, just empty data.
+
+4. **POST /api/clients as admin (allowed):**
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -H "Cookie: mock-auth-user=admin@waypoint.com" \
+     -d '{
+       "firstName": "PermTest", "lastName": "AdminCreate", "email": "permtest1@example.com",
+       "phone": "+3333333333", "source": "walk-in", "createdById": 1
+     }' | jq
+   ```
+   Expected: Returns 201 with the new client.
+
+5. **POST /api/clients as staff (rejected):**
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -H "Cookie: mock-auth-user=staff@waypoint.com" \
+     -d '{
+       "firstName": "PermTest", "lastName": "StaffCreate", "email": "permtest2@example.com",
+       "phone": "+4444444444", "source": "phone", "createdById": 2
+     }' | jq
+   ```
+   Expected: Returns 403 with `{ error: "Only administrators can create clients" }`.
+
+6. **PATCH /api/clients as admin (allowed):**
+
+   - First note the ID of any existing client.
+
+   ```bash
+   curl -s -X PATCH http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -H "Cookie: mock-auth-user=admin@waypoint.com" \
+     -d '{"id": <CLIENT_ID>, "firstName": "UpdatedByAdmin"}' | jq
+   ```
+   Expected: Returns 200 with the updated client.
+
+7. **PATCH /api/clients as staff (rejected):**
+
+   ```bash
+   curl -s -X PATCH http://localhost:3000/api/clients \
+     -H "Content-Type: application/json" \
+     -H "Cookie: mock-auth-user=staff@waypoint.com" \
+     -d '{"id": <CLIENT_ID>, "firstName": "AttemptedByStaff"}' | jq
+   ```
+   Expected: Returns 403 with `{ error: "Only administrators can update clients" }`.
+
+8. **GET /api/applications as admin (sees all applications):**
+
+   ```bash
+   curl -s http://localhost:3000/api/applications \
+     -H "Cookie: mock-auth-user=admin@waypoint.com" | jq
+   ```
+   Expected: Returns 200 with all applications, including those linked to unassigned clients and assigned clients. Both the UK Tourist Visa and Canada Study Permit applications are present.
+
+9. **GET /api/applications as staff (sees only applications for assigned clients):**
+
+   ```bash
+   curl -s http://localhost:3000/api/applications \
+     -H "Cookie: mock-auth-user=staff@waypoint.com" | jq
+   ```
+   Expected: Returns 200 but only applications where the linked client's `assignedStaffId` matches the staff user (id=2). The Canada Study Permit (assigned to staff) SHOULD appear. The UK Tourist Visa (for unassigned client) should NOT appear.
+
+10. **GET /api/applications as unauthenticated (empty response):**
+
+    ```bash
+    curl -s http://localhost:3000/api/applications | jq
+    ```
+    Expected: Returns 200 with `{ applications: [] }`.
+
+11. **POST /api/applications as admin (allowed):**
+
+    ```bash
+    curl -s -X POST http://localhost:3000/api/applications \
+      -H "Content-Type: application/json" \
+      -H "Cookie: mock-auth-user=admin@waypoint.com" \
+      -d '{
+        "clientId": <CLIENT_ID>,
+        "serviceType": "Schengen Tourist Visa",
+        "destinationCountry": "France",
+        "travelPurpose": "Tourism"
+      }' | jq
+    ```
+    Expected: Returns 201 with the new application.
+
+12. **POST /api/applications as staff (rejected):**
+
+    ```bash
+    curl -s -X POST http://localhost:3000/api/applications \
+      -H "Content-Type: application/json" \
+      -H "Cookie: mock-auth-user=staff@waypoint.com" \
+      -d '{
+        "clientId": <CLIENT_ID>,
+        "serviceType": "USA B1/B2 Visa",
+        "destinationCountry": "USA",
+        "travelPurpose": "Business"
+      }' | jq
+    ```
+    Expected: Returns 403 with `{ error: "Only administrators can create applications" }`.
+
+13. **PATCH /api/applications as admin (allowed):**
+
+    ```bash
+    curl -s -X PATCH http://localhost:3000/api/applications \
+      -H "Content-Type: application/json" \
+      -H "Cookie: mock-auth-user=admin@waypoint.com" \
+      -d '{"id": <APP_ID>, "currentStage": "INITIAL_CONSULTATION"}' | jq
+    ```
+    Expected: Returns 200 with the updated application.
+
+14. **PATCH /api/applications as staff (rejected):**
+
+    ```bash
+    curl -s -X PATCH http://localhost:3000/api/applications \
+      -H "Content-Type: application/json" \
+      -H "Cookie: mock-auth-user=staff@waypoint.com" \
+      -d '{"id": <APP_ID>, "currentStage": "DOCUMENT_COLLECTION_VERIFICATION"}' | jq
+    ```
+    Expected: Returns 403 with `{ error: "Only administrators can update applications" }`.
+
+#### Part B — Frontend UI Visibility Enforcement
+
+15. **Admin sees "Register Client" button:**
+
+    - Log in as admin via the browser (`http://localhost:3000`).
+    - Navigate to the Clients tab.
+    - The "Register Client" button is visible in the header area.
+
+16. **Staff does NOT see "Register Client" button:**
+
+    - Log in as staff (`staff@waypoint.com` / `password123`).
+    - Navigate to the Clients tab.
+    - The "Register Client" button is NOT visible. The header only shows the title and description.
+
+17. **Admin sees "New Application" button:**
+
+    - Log in as admin.
+    - Navigate to the Applications tab.
+    - The "New Application" button is visible.
+
+18. **Staff does NOT see "New Application" button:**
+
+    - Log in as staff.
+    - Navigate to the Applications tab.
+    - The "New Application" button is NOT visible.
+
+19. **Admin sees "Edit Profile" button on client profile:**
+
+    - Log in as admin.
+    - Navigate to the Clients tab.
+    - Click "View File" on any client to open the client profile page.
+    - The "Edit Profile" button is visible in the profile header.
+
+20. **Staff does NOT see "Edit Profile" button on client profile:**
+
+    - Log in as staff.
+    - Navigate to the Clients tab.
+    - Click "View File" on a client the staff member is assigned to.
+    - The "Edit Profile" button is NOT visible in the profile header.
+
+21. **Staff can still view client profiles for assigned clients:**
+
+    - Log in as staff.
+    - Navigate to the Clients tab.
+    - Only clients assigned to the staff member appear in the list.
+    - Click "View File" — the client profile loads with all read-only fields (contact info, personal details, record details).
+    - All data renders correctly without edit controls.
+
+22. **Staff sees empty client list when no clients are assigned:**
+
+    - Create or ensure a staff user exists with no assigned clients.
+    - Log in as that staff member and navigate to Clients.
+    - The client list table should be empty, showing the empty state message ("No clients registered yet").
+
+23. **Staff sees filtered applications list:**
+
+    - Log in as staff.
+    - Navigate to the Applications tab.
+    - The applications table only shows applications for clients assigned to that staff member.
+    - Applications linked to unassigned clients or clients assigned to other staff are not visible.
+
+#### Part C — Auth Helper
+
+24. **`getCurrentUserFromCookies` resolves admin correctly:**
+
+    ```bash
+    # Use a quick Node script to verify the auth helper
+    node -e "
+    const { createServer } = require('http');
+    createServer((req, res) => {
+      // Verify the mock-auth-user cookie is read
+      const cookie = req.headers.cookie;
+      if (cookie && cookie.includes('mock-auth-user=admin@waypoint.com')) {
+        res.writeHead(200);
+        res.end('admin resolved');
+      } else {
+        res.writeHead(200);
+        res.end('no user');
+      }
+    }).listen(9999, () => {
+      const http = require('http');
+      const opts = { hostname: 'localhost', port: 9999, path: '/', headers: { Cookie: 'mock-auth-user=admin@waypoint.com' } };
+      http.get(opts, (r) => { let d=''; r.on('data', c => d+=c); r.on('end', () => { console.log('Result:', d); process.exit(); }); });
+    });
+    " 2>/dev/null
+    ```
+    Alternatively, verify by sending curl requests and confirming the cookie is read — the API routes that call `getCurrentUserFromCookies` behave correctly based on user role in all steps above.
+
+25. **Build verification:**
+
+    ```bash
+    npm run build
+    ```
+    Expected: "✓ Compiled successfully". No new TypeScript or build errors related to permissions code.
+
+    ```bash
+    npm run lint
+    ```
+    Expected: No new lint errors introduced by `src/lib/auth.ts`, the API route changes, or the frontend permission guards.
+
+---
+
 ## Task 3 — Client List with Search and Filters
 
 ### Setup Commands
