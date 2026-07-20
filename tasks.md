@@ -71,7 +71,7 @@ Merge order:
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
 | [x] Create client database model and API/actions | Developer 2 | `feature/client-model` | Database setup |
-| [ ] Build client registration form | Developer 2 | `feature/client-registration` | Client model, UI shell |
+| [x] Build client registration form | Developer 2 | `feature/client-registration` | Client model, UI shell |
 | [ ] Build client list with search and filters | Developer 2 | `feature/client-list` | Client registration |
 | [ ] Build client profile page | Developer 2 | `feature/client-profile` | Client list |
 | [ ] Create application database model linked to client | Developer 2 | `feature/application-model` | Client model |
