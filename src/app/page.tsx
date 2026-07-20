@@ -15,6 +15,7 @@ import {
   Search,
   Filter,
   ArrowRight,
+  ArrowLeft,
   FileCheck2,
   Briefcase,
   UserPlus,
@@ -23,7 +24,12 @@ import {
   Power,
   KeyRound,
   User as UserIcon,
-  Phone
+  Phone,
+  Mail,
+  MapPin,
+  Calendar,
+  Globe,
+  Edit
 } from "lucide-react";
 
 export default function Home() {
@@ -80,6 +86,10 @@ export default function Home() {
   const [clientFilterSource, setClientFilterSource] = useState("all");
   const [clientFilterStaff, setClientFilterStaff] = useState("all");
 
+  // Client Profile State
+  const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [clientProfileLoading, setClientProfileLoading] = useState(false);
+
   // Sync profile fields when user is loaded
   useEffect(() => {
     if (user) {
@@ -132,6 +142,23 @@ export default function Home() {
       fetchClients();
     }
   }, [currentTab]);
+
+  // Fetch single client for profile view
+  const viewClientProfile = async (clientId: number) => {
+    setClientProfileLoading(true);
+    try {
+      const res = await fetch(`/api/clients`);
+      const data = await res.json();
+      if (res.ok) {
+        const client = data.clients.find((c: any) => c.id === clientId);
+        setSelectedClient(client || null);
+      }
+    } catch (err) {
+      console.error("Failed to load client profile:", err);
+    } finally {
+      setClientProfileLoading(false);
+    }
+  };
 
   // Enforce role-based access control inside client
   useEffect(() => {
@@ -600,7 +627,7 @@ export default function Home() {
             </div>
           )}
 
-          {currentTab === "clients" && (
+          {currentTab === "clients" && !selectedClient && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="flex justify-between items-center flex-wrap gap-4">
                 <div>
@@ -919,7 +946,7 @@ export default function Home() {
                             )}
                           </td>
                           <td className="py-3.5 px-6 text-right">
-                            <button className="text-primary hover:underline font-semibold text-xs">View File</button>
+                            <button onClick={() => viewClientProfile(c.id)} className="text-primary hover:underline font-semibold text-xs cursor-pointer">View File</button>
                           </td>
                         </tr>
                       ))}
@@ -930,6 +957,137 @@ export default function Home() {
               </div>
             </div>
           )}
+
+          {currentTab === "clients" && selectedClient && clientProfileLoading ? (
+            <div className="py-20 flex justify-center items-center">
+              <div className="h-10 w-10 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : currentTab === "clients" && selectedClient ? (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Back Button */}
+              <button
+                onClick={() => setSelectedClient(null)}
+                className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="h-4 w-4" /> Back to Client List
+              </button>
+
+              {/* Profile Header */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <div className="flex items-start justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center font-bold text-primary text-2xl uppercase">
+                      {selectedClient.firstName.slice(0, 1)}{selectedClient.lastName.slice(0, 1)}
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-extrabold text-foreground">{selectedClient.firstName} {selectedClient.lastName}</h3>
+                      <p className="text-sm font-mono text-primary font-bold mt-0.5">{selectedClient.fileNumber}</p>
+                      <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary capitalize">
+                        {selectedClient.source.replace("-", " ")}
+                      </span>
+                    </div>
+                  </div>
+                  <button className="bg-card border border-border text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-foreground hover:bg-secondary transition-all cursor-pointer">
+                    <Edit className="h-3.5 w-3.5" /> Edit Profile
+                  </button>
+                </div>
+              </div>
+
+              {/* Profile Details Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Contact Information */}
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-primary" /> Contact Information
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Email</p>
+                        <p className="text-xs font-semibold text-foreground">{selectedClient.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Phone</p>
+                        <p className="text-xs font-semibold text-foreground">{selectedClient.phone}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Address</p>
+                        <p className="text-xs font-semibold text-foreground">{selectedClient.address || "—"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Personal Details */}
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                    <UserIcon className="h-4 w-4 text-primary" /> Personal Details
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Passport Number</p>
+                        <p className="text-xs font-semibold text-foreground">{selectedClient.passportNumber || "—"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Date of Birth</p>
+                        <p className="text-xs font-semibold text-foreground">
+                          {selectedClient.dateOfBirth
+                            ? new Date(selectedClient.dateOfBirth).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Assigned Staff</p>
+                        <p className="text-xs font-semibold text-foreground">{selectedClient.assignedStaff?.name || "Unassigned"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metadata Footer */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4">Record Details</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Created By</p>
+                    <p className="font-semibold text-foreground">{selectedClient.createdBy?.name || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Created At</p>
+                    <p className="font-semibold text-foreground">
+                      {new Date(selectedClient.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Last Updated</p>
+                    <p className="font-semibold text-foreground">
+                      {new Date(selectedClient.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Client ID</p>
+                    <p className="font-semibold text-foreground font-mono">#{selectedClient.id}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {currentTab === "tasks" && (
             <div className="space-y-6 animate-in fade-in duration-200">
