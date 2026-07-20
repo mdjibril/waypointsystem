@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 
@@ -32,6 +33,14 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
+
+    const cookieStore = await cookies();
+    cookieStore.set("mock-auth-user", email, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
 
     const { passwordHash: _, ...userWithoutPassword } = user;
 
