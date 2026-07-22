@@ -30,7 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const savedUser = localStorage.getItem("waypoint_user");
     if (savedUser) {
       try {
-        setUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        setUser({ ...parsed, role: parsed.role.toUpperCase() });
       } catch {
         localStorage.removeItem("waypoint_user");
       }
@@ -54,8 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      setUser(data.user);
-      localStorage.setItem("waypoint_user", JSON.stringify(data.user));
+      setUser({ ...data.user, role: data.user.role.toUpperCase() });
+      localStorage.setItem("waypoint_user", JSON.stringify({ ...data.user, role: data.user.role.toUpperCase() }));
       return true;
     } catch {
       setLoginError("Network error. Please try again.");
