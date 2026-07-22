@@ -20,6 +20,8 @@ model User {
   clientsAssigned Client[]      @relation("ClientAssignedStaff")
   applications    Application[] @relation("ApplicationAssignedStaff")
   stageChangesMade ApplicationStageHistory[] @relation("StageHistoryChangedBy")
+  assignedTasks   Task[]        @relation("TaskAssignee")
+  createdTasks    Task[]        @relation("TaskAssignedBy")
 
   @@map("users")
 }
@@ -77,6 +79,7 @@ model Client {
   assignedStaffId Int?
   assignedStaff   User?         @relation("ClientAssignedStaff", fields: [assignedStaffId], references: [id])
   applications    Application[]
+  tasks           Task[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -97,10 +100,34 @@ model Application {
   assignedStaffId    Int?
   assignedStaff      User?    @relation("ApplicationAssignedStaff", fields: [assignedStaffId], references: [id])
   stageHistory       ApplicationStageHistory[]
+  tasks              Task[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@map("applications")
+}
+
+model Task {
+  id            Int       @id @default(autoincrement())
+  title         String
+  description   String?
+  clientId      Int
+  client        Client    @relation(fields: [clientId], references: [id])
+  applicationId Int?
+  application   Application? @relation(fields: [applicationId], references: [id])
+  stage         String?
+  assigneeId    Int?
+  assignee      User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  assignedById  Int
+  assignedBy    User      @relation("TaskAssignedBy", fields: [assignedById], references: [id])
+  priority      String    @default("MEDIUM")
+  status        String    @default("TODO")
+  dueDate       DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("tasks")
 }
 
 model ApplicationStageHistory {
