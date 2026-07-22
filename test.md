@@ -692,6 +692,181 @@ npm run dev
 
 ---
 
+## Task 4 — Task status updates and completion flow
+
+### Test Steps
+
+1. **Inline status dropdown on each row:**
+
+   - Navigate to the Tasks tab.
+   - Each task row has a status dropdown with options: To Do, In Progress, Waiting, Done, Cancelled.
+   - The dropdown is color-coded to match the current status.
+
+2. **Change status via dropdown:**
+
+   - Select "In Progress" on a TODO task.
+
+   ```bash
+   # Verify API was called
+   curl -s -X PATCH http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"id": <TASK_ID>, "status": "IN_PROGRESS"}' | jq '.task.status'
+   ```
+   Expected: Returns `"IN_PROGRESS"`.
+
+3. **Mark as Done sets completedAt:**
+
+   - Select "Done" on a task.
+
+   ```bash
+   curl -s http://localhost:3000/api/tasks | jq '.tasks[] | select(.id == <TASK_ID>) | .completedAt'
+   ```
+   Expected: `completedAt` is a non-null timestamp.
+
+4. **Reopening a completed task clears completedAt:**
+
+   - Change a DONE task back to TODO.
+
+   ```bash
+   curl -s -X PATCH http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"id": <TASK_ID>, "status": "TODO"}' | jq '.task.completedAt'
+   ```
+   Expected: Returns `null`.
+
+5. **Optimistic local update:**
+
+   - Change a task status via the dropdown — the UI updates immediately without a full page reload.
+
+6. **Build verification:**
+
+   ```bash
+   npm run build
+   ```
+   Expected: "✓ Compiled successfully".
+
+---
+
+## Task 5 — Overdue task indicators and filters
+
+### Test Steps
+
+1. **Overdue tasks highlighted in table:**
+
+   - Create a task with a due date in the past and status not DONE/CANCELLED.
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{
+       "title": "Overdue test task",
+       "clientId": 1,
+       "dueDate": "2024-01-01T00:00:00.000Z",
+       "priority": "HIGH"
+     }' | jq
+   ```
+
+   - Navigate to Tasks tab — the overdue task row has a red-tinted background (`bg-red-500/5`).
+   - The due date column shows the date in red with an "OVERDUE" badge.
+
+2. **Search bar filters tasks:**
+
+   - Type a task title in the search bar — only matching tasks are shown.
+   - Type a client name — tasks for that client are shown.
+   - Type a file number — matching tasks are shown.
+   - Clear the search — all tasks reappear.
+
+3. **Status filter:**
+
+   - Select "To Do" from the status filter — only TODO tasks are shown.
+   - Select "Overdue" — only overdue tasks are shown.
+   - Select "All Statuses" — all tasks reappear.
+
+4. **Priority filter:**
+
+   - Select "Urgent" — only URGENT tasks are shown.
+   - Select "High" — only HIGH tasks are shown.
+   - Select "All Priorities" — all tasks reappear.
+
+5. **Clear filters:**
+
+   - After applying any filter, a "Clear filters" link appears.
+   - Click it — all filters reset and all tasks are shown.
+
+6. **Filtered empty state:**
+
+   - Apply a filter that matches no tasks.
+   - A search icon is shown with text: "No tasks match your filters".
+
+7. **Overdue counter on dashboard:**
+
+   - The "Overdue Staff Tasks" card on the Dashboard shows the correct count of overdue tasks.
+
+8. **Build verification:**
+
+   ```bash
+   npm run build
+   ```
+   Expected: "✓ Compiled successfully".
+
+---
+
+## Task 6 — Link tasks to workflow stages and client profile
+
+### Test Steps
+
+1. **Client name is clickable in task table:**
+
+   - Navigate to Tasks tab.
+   - Click on a client's name in the Client column.
+   - The page navigates to that client's profile view.
+
+2. **Client profile shows tasks:**
+
+   - Open a client profile (via "View File" on Clients tab).
+   - A "Tasks" card is displayed with all tasks for that client.
+   - Each task shows: title, assignee, stage, priority badge, status badge.
+
+3. **Tasks linked to workflow stages:**
+
+   - Create a task with a specific stage (e.g., "DOCUMENT_COLLECTION_VERIFICATION").
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{
+       "title": "Stage-linked task",
+       "clientId": 1,
+       "stage": "DOCUMENT_COLLECTION_VERIFICATION",
+       "priority": "MEDIUM"
+     }' | jq
+   ```
+
+   - The stage column in the task table shows the human-readable label ("Document Collection & Verification").
+   - The client profile tasks card also displays the stage.
+
+4. **Application dropdown filters by client:**
+
+   - Open the Create Task modal.
+   - Select a client — the Application dropdown filters to only show applications for that client.
+
+5. **Stage dropdown populated:
+
+   - The Workflow Stage dropdown in the Create Task modal lists all 12 workflow stages from `STAGE_ORDER`.
+
+6. **Build verification:**
+
+   ```bash
+   npm run build
+   ```
+   Expected: "✓ Compiled successfully" with no errors.
+
+---
+
+# Phase 6 — Test Plan: Documents And Checklists
+
+---
+
 ## Task 7 — Admin Visibility for All Clients and Staff Visibility for Assigned Clients
 
 ### Setup Commands
