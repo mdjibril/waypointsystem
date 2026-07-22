@@ -338,6 +338,15 @@ export default function Home() {
     }
   }, [currentTab]);
 
+  // Load dashboard stats
+  useEffect(() => {
+    if (currentTab === "dashboard") {
+      fetchTasks();
+      if (clients.length === 0) fetchClients();
+      if (applications.length === 0) fetchApplications();
+    }
+  }, [currentTab]);
+
   // Fetch a single application for the detail view
   const viewApplication = async (applicationId: number) => {
     setApplicationDetailLoading(true);
@@ -957,9 +966,8 @@ export default function Home() {
                     <div className="bg-blue-500/10 p-2.5 rounded-xl text-blue-500">
                       <Users className="h-5 w-5" />
                     </div>
-                    <span className="text-[10px] bg-green-500/10 text-green-600 font-bold px-1.5 py-0.5 rounded">+12%</span>
                   </div>
-                  <h4 className="text-2xl font-black mt-4 text-foreground">148</h4>
+                  <h4 className="text-2xl font-black mt-4 text-foreground">{clients.length}</h4>
                   <p className="text-xs text-muted-foreground font-medium mt-1">Active Client Profiles</p>
                 </div>
 
@@ -968,9 +976,8 @@ export default function Home() {
                     <div className="bg-primary/10 p-2.5 rounded-xl text-primary">
                       <TrendingUp className="h-5 w-5" />
                     </div>
-                    <span className="text-[10px] bg-green-500/10 text-green-600 font-bold px-1.5 py-0.5 rounded">+8%</span>
                   </div>
-                  <h4 className="text-2xl font-black mt-4 text-foreground">84</h4>
+                  <h4 className="text-2xl font-black mt-4 text-foreground">{applications.length}</h4>
                   <p className="text-xs text-muted-foreground font-medium mt-1">Visa Processing Pipeline</p>
                 </div>
 
@@ -979,10 +986,9 @@ export default function Home() {
                     <div className="bg-yellow-500/10 p-2.5 rounded-xl text-yellow-600">
                       <Clock className="h-5 w-5" />
                     </div>
-                    <span className="text-[10px] bg-yellow-500/10 text-yellow-600 font-bold px-1.5 py-0.5 rounded">Urgent</span>
                   </div>
-                  <h4 className="text-2xl font-black mt-4 text-foreground">19</h4>
-                  <p className="text-xs text-muted-foreground font-medium mt-1">Pending Quality Reviews</p>
+                  <h4 className="text-2xl font-black mt-4 text-foreground">{tasks.filter((t: any) => t.status === "TODO" || t.status === "IN_PROGRESS").length}</h4>
+                  <p className="text-xs text-muted-foreground font-medium mt-1">Active Tasks</p>
                 </div>
 
                 <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
@@ -990,48 +996,111 @@ export default function Home() {
                     <div className="bg-red-500/10 p-2.5 rounded-xl text-red-500">
                       <AlertTriangle className="h-5 w-5" />
                     </div>
-                    <span className="text-[10px] bg-red-500/10 text-red-500 font-bold px-1.5 py-0.5 rounded">Overdue</span>
                   </div>
-                  <h4 className="text-2xl font-black mt-4 text-foreground">7</h4>
+                  <h4 className="text-2xl font-black mt-4 text-foreground">
+                    {tasks.filter((t: any) => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "DONE" && t.status !== "CANCELLED").length}
+                  </h4>
                   <p className="text-xs text-muted-foreground font-medium mt-1">Overdue Staff Tasks</p>
                 </div>
               </div>
 
               {/* Core Layout Panels */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                {/* Recent Activities Section */}
+                {/* Pipeline Overview Section */}
                 <div className="xl:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <h4 className="font-bold text-sm text-foreground mb-4">Pipeline Overview</h4>
-                  <div className="h-64 flex items-center justify-center border border-dashed border-border rounded-xl bg-muted/10">
-                    <div className="text-center max-w-sm px-4">
-                      <Briefcase className="mx-auto h-8 w-8 text-muted-foreground/60 mb-2" />
-                      <p className="text-xs font-bold text-foreground">Interactive Stage board</p>
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        Developer 2 is assigned to implement the workflow board visual shell layout.
-                      </p>
-                    </div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {STAGE_ORDER.slice(0, 10).map((stage) => {
+                      const count = applications.filter((a: any) => a.currentStage === stage).length;
+                      return (
+                        <div key={stage} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted/20 transition-colors">
+                          <span className="text-xs font-semibold text-foreground">{STAGE_LABELS[stage]}</span>
+                          <span className="text-[10px] font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{count}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Task Checklist Panel */}
                 <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col">
                   <h4 className="font-bold text-sm text-foreground mb-4">My High-Priority Tasks</h4>
-                  <div className="space-y-3 flex-1">
-                    {[
-                      { id: 1, title: "Review UK Visa Docs", client: "David Miller", due: "Today" },
-                      { id: 2, title: "Confirm Biometrics booking", client: "Alice Green", due: "Tomorrow" },
-                      { id: 3, title: "Draft assessment sheet", client: "Richard Brown", due: "In 2 days" }
-                    ].map(t => (
-                      <div key={t.id} className="p-3 border border-border/80 rounded-xl hover:border-primary/50 transition-colors flex justify-between items-center group cursor-pointer bg-muted/20">
-                        <div>
-                          <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">{t.title}</p>
-                          <span className="text-[10px] text-muted-foreground">{t.client}</span>
+                  <div className="space-y-3 flex-1 max-h-64 overflow-y-auto">
+                    {tasks.filter((t: any) => t.status !== "DONE" && t.status !== "CANCELLED").slice(0, 6).length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-8">No active tasks</p>
+                    ) : (
+                      tasks.filter((t: any) => t.status !== "DONE" && t.status !== "CANCELLED").slice(0, 6).map((t: any) => (
+                        <div key={t.id} className="p-3 border border-border/80 rounded-xl hover:border-primary/50 transition-colors flex justify-between items-center group bg-muted/20">
+                          <div>
+                            <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">{t.title}</p>
+                            <span className="text-[10px] text-muted-foreground">{t.client?.firstName} {t.client?.lastName}</span>
+                          </div>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-lg ${
+                            t.priority === "URGENT" ? "bg-red-500/10 text-red-600" :
+                            t.priority === "HIGH" ? "bg-orange-500/10 text-orange-600" :
+                            "bg-primary/10 text-primary"
+                          }`}>
+                            {t.priority}
+                          </span>
                         </div>
-                        <span className="text-[9px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-lg">{t.due}</span>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
+              </div>
+
+              {/* Recent Tasks Table */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-bold text-sm text-foreground">Recent Tasks</h4>
+                  <button onClick={() => setCurrentTab("tasks")} className="text-xs text-primary font-semibold hover:underline cursor-pointer">View All</button>
+                </div>
+                {tasks.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-8">No tasks yet</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left p-3 font-bold text-muted-foreground uppercase text-[10px]">Task</th>
+                          <th className="text-left p-3 font-bold text-muted-foreground uppercase text-[10px]">Client</th>
+                          <th className="text-left p-3 font-bold text-muted-foreground uppercase text-[10px]">Assignee</th>
+                          <th className="text-left p-3 font-bold text-muted-foreground uppercase text-[10px]">Priority</th>
+                          <th className="text-left p-3 font-bold text-muted-foreground uppercase text-[10px]">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tasks.slice(0, 5).map((t: any) => (
+                          <tr key={t.id} className="border-b border-border/60 hover:bg-muted/10 transition-colors">
+                            <td className="p-3">
+                              <p className="font-bold text-foreground">{t.title}</p>
+                            </td>
+                            <td className="p-3">
+                              <span className="font-semibold text-foreground">{t.client?.firstName} {t.client?.lastName}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className="text-[10px]">{t.assignee?.name || "Unassigned"}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                t.priority === "URGENT" ? "bg-red-500/10 text-red-600" :
+                                t.priority === "HIGH" ? "bg-orange-500/10 text-orange-600" :
+                                "bg-blue-500/10 text-blue-600"
+                              }`}>{t.priority}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                t.status === "DONE" ? "bg-green-500/10 text-green-600" :
+                                t.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
+                                "bg-muted text-muted-foreground"
+                              }`}>{t.status.replace(/_/g, " ")}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
