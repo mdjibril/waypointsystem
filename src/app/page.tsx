@@ -376,6 +376,7 @@ export default function Home() {
       fetchTasks();
       if (clients.length === 0) fetchClients();
       if (applications.length === 0) fetchApplications();
+      fetchDocuments();
     }
   }, [currentTab]);
 
@@ -1150,11 +1151,11 @@ export default function Home() {
                 <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
                   <div className="flex justify-between items-start">
                     <div className="bg-yellow-500/10 p-2.5 rounded-xl text-yellow-600">
-                      <Clock className="h-5 w-5" />
+                      <FileText className="h-5 w-5" />
                     </div>
                   </div>
-                  <h4 className="text-2xl font-black mt-4 text-foreground">{tasks.filter((t: any) => t.status === "TODO" || t.status === "IN_PROGRESS").length}</h4>
-                  <p className="text-xs text-muted-foreground font-medium mt-1">Active Tasks</p>
+                  <h4 className="text-2xl font-black mt-4 text-foreground">{documents.filter((d: any) => d.status === "PENDING").length}</h4>
+                  <p className="text-xs text-muted-foreground font-medium mt-1">Documents Pending Review</p>
                 </div>
 
                 <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
