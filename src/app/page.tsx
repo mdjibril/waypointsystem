@@ -783,6 +783,23 @@ export default function Home() {
     }
   };
 
+  const handleUpdateTaskStatus = async (taskId: number, newStatus: string) => {
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: taskId, status: newStatus }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? data.task : t)));
+      }
+    } catch (err) {
+      console.error("Failed to update task status:", err);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col md:flex-row bg-background font-sans relative overflow-hidden">
@@ -2440,15 +2457,23 @@ export default function Home() {
                               </span>
                             </td>
                             <td className="p-4">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                t.status === "DONE" ? "bg-green-500/10 text-green-600" :
-                                t.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
-                                t.status === "WAITING" ? "bg-yellow-500/10 text-yellow-600" :
-                                t.status === "CANCELLED" ? "bg-red-500/10 text-red-600" :
-                                "bg-muted text-muted-foreground"
-                              }`}>
-                                {t.status.replace(/_/g, " ")}
-                              </span>
+                              <select
+                                value={t.status}
+                                onChange={(e) => handleUpdateTaskStatus(t.id, e.target.value)}
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border-none cursor-pointer ${
+                                  t.status === "DONE" ? "bg-green-500/10 text-green-600" :
+                                  t.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
+                                  t.status === "WAITING" ? "bg-yellow-500/10 text-yellow-600" :
+                                  t.status === "CANCELLED" ? "bg-red-500/10 text-red-600" :
+                                  "bg-muted text-muted-foreground"
+                                }`}
+                              >
+                                <option value="TODO">To Do</option>
+                                <option value="IN_PROGRESS">In Progress</option>
+                                <option value="WAITING">Waiting</option>
+                                <option value="DONE">Done</option>
+                                <option value="CANCELLED">Cancelled</option>
+                              </select>
                             </td>
                           </tr>
                         ))}

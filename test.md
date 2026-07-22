@@ -1876,3 +1876,119 @@ curl -s -X POST http://localhost:3000/api/applications \
    npm run build
    ```
    Expected: "✓ Compiled successfully". `/api/tasks` appears as a dynamic route (ƒ).
+
+---
+
+## Task 2 — Admin task creation and assignment UI
+
+### Test Steps
+
+1. **Tasks tab visible for both roles:**
+
+   - Log in as admin — "Tasks" appears in the sidebar.
+   - Log in as staff — "Tasks" appears in the sidebar.
+   - Click "Tasks" — the Task Manager page loads with header "Task Manager".
+
+2. **Admin sees "Create Task" button:**
+
+   - Log in as admin — a "Create Task" button is visible in the top-right area.
+
+   ```bash
+   # Verify the button is only for admins
+   grep -n "role.*ADMIN.*Create Task\|Create Task.*ADMIN" src/app/page.tsx
+   ```
+   Expected: The Create Task button is wrapped in `{user?.role === "ADMIN" && (`.
+
+3. **Opening the creation modal:**
+
+   - Click "Create Task" — a modal overlay appears with heading "Create New Task".
+   - Modal has a "Cancel" button in the top-right.
+   - Form fields: Title (required), Description (textarea), Client (dropdown), Application (dropdown), Workflow Stage (dropdown), Assignee (dropdown), Priority (dropdown), Due Date.
+
+4. **Creating a task:**
+
+   ```bash
+   # Create via the UI, or test via API:
+   curl -s -X POST http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{
+       "title": "Review passport documents",
+       "description": "Check passport validity and expiry date",
+       "clientId": 1,
+       "applicationId": 1,
+       "stage": "DOCUMENT_COLLECTION_VERIFICATION",
+       "assigneeId": 2,
+       "priority": "HIGH",
+       "dueDate": "2026-08-01T00:00:00.000Z"
+     }' | jq
+   ```
+   Expected: Returns 201. Task appears in the tasks table.
+
+5. **Tasks table displays correctly:**
+
+   - Columns: Task, Client, Stage, Assignee, Priority, Due, Status.
+   - Priority is color-coded: URGENT (red), HIGH (orange), MEDIUM (blue), LOW (muted).
+   - Status is color-coded: DONE (green), IN_PROGRESS (blue), WAITING (yellow), CANCELLED (red), TODO (muted).
+   - Stage column shows human-readable stage label from `STAGE_LABELS`.
+   - Due date formatted as "DD Mon".
+
+6. **Client dropdown populated:**
+
+   - The Client dropdown in the create modal lists all clients as "WP-XXXX-YYYY — FirstName LastName".
+
+7. **Application dropdown filtered by client:**
+
+   - Selecting a client filters the Application dropdown to only show applications for that client.
+
+8. **Staff does NOT see "Create Task" button:**
+
+   - Log in as staff (`staff@waypoint.com` / `password123`).
+   - Navigate to Tasks tab.
+   - The "Create Task" button is not visible.
+
+---
+
+## Task 3 — Staff task dashboard
+
+### Test Steps
+
+1. **Dashboard loads live data:**
+
+   - Log in as admin and navigate to Dashboard.
+   - "Active Client Profiles" card shows the count from `/api/clients`.
+
+   ```bash
+   curl -s http://localhost:3000/api/clients | jq '.clients | length'
+   ```
+
+2. **Pipeline Overview panel:**
+
+   - Shows each workflow stage with a count of applications in that stage.
+   - Counts match the actual application data.
+
+   ```bash
+   curl -s http://localhost:3000/api/applications | jq '.applications | group_by(.currentStage) | map({stage: .[0].currentStage, count: length})'
+   ```
+
+3. **High-Priority Tasks panel:**
+
+   - Shows active tasks (not DONE and not CANCELLED), limited to 6 items.
+   - Each task shows title, client name, and a color-coded priority badge.
+   - Priority colors: URGENT (red), HIGH (orange), MEDIUM/LOW (blue).
+
+4. **Recent Tasks table:**
+
+   - Shows 5 most recent tasks.
+   - Columns: Task, Client, Assignee, Priority, Status.
+   - "View All" link navigates to the Tasks tab.
+
+5. **Overdue counter is accurate:**
+
+   - "Overdue Staff Tasks" card counts tasks where `dueDate < now` AND `status !== "DONE"` AND `status !== "CANCELLED"`.
+
+6. **Build verification:**
+
+   ```bash
+   npm run build
+   ```
+   Expected: "✓ Compiled successfully" with no errors.
