@@ -63,6 +63,7 @@ model DocumentTemplate {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  @@unique([name, serviceType])
   @@map("document_templates")
 }
 

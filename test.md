@@ -870,49 +870,71 @@ npm run dev
 ```bash
 npm run dev
 npx prisma generate
-npx prisma migrate dev
+npx prisma db push
 ```
 
 Log in via the browser at `http://localhost:3000` as admin (`admin@waypoint.com` / `password123`). Register a test client and application if you haven't already.
 
 ---
 
-## Task 1 — Document model, API, and template management
+## Task 1 — Create document and checklist template database models
 
 ### Test Steps
 
-1. **Schema migration applied:**
-   - Run `ls prisma/migrations/*add_documents_model/migration.sql` — migration file for the `documents` table exists.
-   - `npm run db:studio` — the `documents` table appears alongside `document_templates`.
+1. **Schema models exist:**
+   - Open `prisma/schema.prisma` — the `DocumentTemplate` model is present with fields: `id`, `name`, `serviceType`, `destinationCountry`, `isRequired`, `sortOrder`, `createdAt`, `updatedAt`.
+   - The `Document` model is present with fields: `id`, `clientId`, `applicationId`, `documentType`, `fileName`, `fileUrl`, `status`, `verificationNotes`, `uploadedById`, `verifiedById`, `createdAt`, `updatedAt`.
+   - The `DocumentTemplate` model has a `@@unique([name, serviceType])` constraint to prevent duplicate templates.
 
-2. **Documents tab loads:**
+2. **API endpoint exists:**
+   - `curl -v http://localhost:3000/api/documents/templates` returns status 200 with `{ "templates": [] }` (empty initially).
+   - `curl -v http://localhost:3000/api/documents` returns status 200 with `{ "documents": [] }`.
+
+3. **Database tables created:**
+   - Run `npx prisma db push` — completes without errors.
+   - Run `npx prisma studio` — the `document_templates` and `documents` tables appear with correct columns.
+
+4. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 2 — Build admin document checklist template management
+
+### Test Steps
+
+1. **Documents tab shows template panel:**
    - Log in and navigate to the Documents tab.
    - Two sections appear: "Checklist Templates" (left panel) and "Uploaded Documents Queue" (right panel).
    - If no templates exist, the left panel shows "No templates yet".
-   - If no documents exist, the right panel shows "No documents uploaded".
 
-3. **Add a checklist template (admin only):**
+2. **Add a checklist template (admin only):**
    - Click "Add Template" — a modal appears with heading "Add Checklist Item".
-   - Fill in: Document Name "Valid Passport", Service Type "UK Tourist Visa", leave destination empty, keep "Required document" checked.
+   - Fill in: Document Name "Valid Passport", Service Type "UK Tourist Visa", Destination Country "United Kingdom", keep "Required document" checked.
    - Click "Add Template" — the modal closes and the template appears in the left panel.
    - The template shows the name, service type, and a "Required" red badge.
 
-4. **Staff does not see "Add Template" button:**
+3. **Staff does not see "Add Template" button:**
    - Log out, log in as staff (`staff@waypoint.com` / `password123`).
    - Navigate to Documents tab — the "Add Template" button is not visible.
    - The "Upload File" button IS visible for staff.
 
-5. **Add optional template:**
+4. **Add optional template:**
    - Log back in as admin.
-   - Add a template with "Required document" unchecked.
-   - The new template shows an "Optional" grey badge in the panel.
+   - Add another template with "Required document" unchecked.
+   - The new template shows an "Optional" grey badge.
+
+5. **Prevent duplicate templates:**
+   - Try to add another "Valid Passport" with "UK Tourist Visa" again.
+   - An error message appears: "A template named ... already exists for this service type".
+   - The duplicate is not created.
 
 6. **Build verification:**
    - `npm run build` — compiles successfully.
 
 ---
 
-## Task 2 — Document upload UI
+## Task 3 — Build document upload UI on application/client profile
 
 ### Test Steps
 
@@ -924,64 +946,102 @@ Log in via the browser at `http://localhost:3000` as admin (`admin@waypoint.com`
    - Document Type (dropdown — populated from checklist templates, includes "Other" option)
    - Client (dropdown — lists all clients, default "No client (unlinked)")
    - File Name (text input, placeholder "e.g. passport_scan.pdf")
-   - "Record Document" submit button
+   - File Upload (file picker input — allows selecting a file from local filesystem)
+   - When a file is selected, its name and size are shown below the input.
 
-3. **Record a document:**
+3. **Record a document with file:**
    - Select a document type from the templates dropdown.
    - Select a client.
    - Enter a file name.
+   - Choose a file using the file picker (any PDF or image).
    - Click "Record Document" — success message appears, modal closes.
    - The new document appears in the Uploaded Documents Queue with status "PENDING" (yellow badge).
 
-4. **Record an unlinked document:**
-   - Open the upload modal again.
-   - Select a type, leave Client as "No client (unlinked)", enter a file name.
+4. **Record a document without file:**
+   - Open upload modal, fill in type, client, and file name.
+   - Do not select a file.
+   - Submit — document is recorded without a file attachment.
+
+5. **Record an unlinked document:**
+   - Open upload modal, select a type, leave Client as "No client (unlinked)", enter a file name.
    - Submit — the document appears in the queue without a client name.
 
-5. **Queue display:**
+6. **Queue display:**
    - Each document row shows: file icon, file name, client name and document type, status badge.
    - Status badges: VERIFIED (green), PENDING (yellow), REJECTED (red).
    - The queue header shows the total count of documents.
 
-6. **Build verification:**
+7. **Build verification:**
    - `npm run build` — compiles successfully.
 
 ---
 
-## Task 3 — Document verification and review queue
+## Task 4 — Add document verification status and notes
 
 ### Test Steps
 
-1. **Admin sees verify/reject buttons:**
-   - As admin, find a PENDING document in the queue.
+1. **Admin sees verify/reject buttons on pending documents:**
+   - As admin, navigate to the Documents tab.
+   - Find a PENDING document in the queue.
    - Two buttons appear: "✓ Verify" (green) and "✕ Reject" (red) next to each pending document.
    - Already verified or rejected documents show static status badges, not buttons.
 
 2. **Staff does not see verification buttons:**
    - Log in as staff, navigate to Documents.
-   - All documents show static status badges — no verify/reject buttons.
+   - All documents show static status badges only — no verify/reject buttons.
 
 3. **Verify a document:**
    - As admin, click "✓ Verify" on a pending document.
    - The status immediately changes to a green "VERIFIED" badge.
-   - The document disappears from the Pending Review section (if it exists).
+   - The Verify/Reject buttons disappear — replaced by the static VERIFIED badge.
 
 4. **Reject a document:**
    - As admin, click "✕ Reject" on another pending document.
    - The status immediately changes to a red "REJECTED" badge.
+   - The Verify/Reject buttons disappear.
 
-5. **Pending Review section appears:**
-   - As admin, when at least one document is PENDING, a "Pending Review" panel appears below the main grid.
-   - The panel shows an alert icon with the count of pending documents.
-   - Each pending document is listed with file name, client, document type, uploaded by, and Verify/Reject buttons.
-   - When all documents are verified/rejected, the section disappears.
+5. **Optimistic update works:**
+   - Verify a document — the badge updates instantly without a page reload.
 
 6. **Build verification:**
    - `npm run build` — compiles successfully.
 
 ---
 
-## Task 4 — Missing document indicators on dashboard
+## Task 5 — Build document review queue for admin/senior staff
+
+### Test Steps
+
+1. **Pending Review section appears when documents are pending:**
+   - As admin, ensure at least one document has PENDING status.
+   - Navigate to the Documents tab.
+   - A "Pending Review" panel appears below the main grid, with a yellow alert icon.
+   - The panel header shows the count of pending documents.
+
+2. **Review queue lists only pending documents:**
+   - Each row shows: file icon, file name, client name, document type, uploaded by.
+   - Each row has "✓ Verify" and "✕ Reject" buttons.
+
+3. **Act on documents from the review queue:**
+   - Click "✓ Verify" on a pending document in the review queue.
+   - The document disappears from the queue and shows as VERIFIED in the main grid.
+   - The queue count decreases by 1.
+
+4. **Queue disappears when empty:**
+   - Verify or reject all pending documents.
+   - The "Pending Review" section disappears entirely.
+
+5. **Staff does not see review queue:**
+   - Log in as staff.
+   - Navigate to the Documents tab.
+   - The "Pending Review" section is not visible (even if pending documents exist).
+
+6. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 6 — Add missing document indicators to workflow and dashboard
 
 ### Test Steps
 
@@ -990,11 +1050,16 @@ Log in via the browser at `http://localhost:3000` as admin (`admin@waypoint.com`
    - The metric grid includes a "Documents Pending Review" card with a file icon (yellow).
    - The count matches the number of PENDING status documents.
 
-2. **Update a document and check dashboard:**
+2. **Count updates in real-time:**
+   - Note the current pending count on the dashboard.
    - Navigate to Documents, verify a pending document.
-   - Return to Dashboard — the count decreases.
-   - Record a new document — the count increases.
+   - Return to Dashboard — the count decreases by 1.
+   - Record a new document from the Documents tab.
+   - Return to Dashboard — the count increases by 1.
 
-3. **Build verification:**
+3. **Card visible to all roles:**
+   - As admin: card is visible.
+   - Log in as staff: card is visible (shows count from staff's assigned clients).
+
+4. **Build verification:**
    - `npm run build` — compiles successfully with no errors.
-

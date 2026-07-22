@@ -243,6 +243,7 @@ export default function Home() {
   const [newDocApplicationId, setNewDocApplicationId] = useState("");
   const [newDocType, setNewDocType] = useState("");
   const [newDocFileName, setNewDocFileName] = useState("");
+  const [newDocFile, setNewDocFile] = useState<File | null>(null);
   const [addDocError, setAddDocError] = useState<string | null>(null);
   const [addDocSuccess, setAddDocSuccess] = useState<string | null>(null);
   const [addDocLoading, setAddDocLoading] = useState(false);
@@ -885,6 +886,17 @@ export default function Home() {
     setAddDocSuccess(null);
 
     try {
+      let fileUrl = null;
+      if (newDocFile) {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(newDocFile);
+        });
+        fileUrl = base64;
+      }
+
       const res = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -893,7 +905,7 @@ export default function Home() {
           applicationId: newDocApplicationId ? Number(newDocApplicationId) : undefined,
           documentType: newDocType,
           fileName: newDocFileName,
-          fileUrl: null,
+          fileUrl,
         }),
       });
 
@@ -907,6 +919,8 @@ export default function Home() {
         setNewDocApplicationId("");
         setNewDocType("");
         setNewDocFileName("");
+        setNewDocFile(null);
+        setIsAddDocumentOpen(false);
         fetchDocuments();
       }
     } catch (err) {
@@ -2853,6 +2867,17 @@ export default function Home() {
                           placeholder="e.g. passport_scan.pdf"
                           className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
                         />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">File Upload</label>
+                        <input
+                          type="file"
+                          onChange={(e) => setNewDocFile(e.target.files?.[0] || null)}
+                          className="w-full text-xs text-foreground file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground hover:file:opacity-90 file:cursor-pointer cursor-pointer bg-muted/20 border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        {newDocFile && (
+                          <p className="text-[10px] text-muted-foreground">Selected: {newDocFile.name} ({(newDocFile.size / 1024).toFixed(1)} KB)</p>
+                        )}
                       </div>
                       <button
                         type="submit"

@@ -45,6 +45,20 @@ export async function POST(request: Request) {
       select: { sortOrder: true },
     });
 
+    const existing = await prisma.documentTemplate.findFirst({
+      where: {
+        name,
+        serviceType: serviceType || null,
+      },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { error: `A template named "${name}" already exists for this service type` },
+        { status: 409 }
+      );
+    }
+
     const template = await prisma.documentTemplate.create({
       data: {
         name,

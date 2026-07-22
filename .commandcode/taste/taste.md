@@ -9,6 +9,7 @@
 - In test plans, include the full, copy-pasteable CLI commands (e.g., curl, npm run) for every test step instead of just describing what to verify. Confidence: 0.65
 - Consult plan.md for development guidelines when working on features. Confidence: 0.65
 - After completing each task, write the test flow in test.md. Confidence: 0.75
+- Test plan sections should map 1:1 to the tasks listed in tasks.md — do not combine multiple tasks into a single test section. Confidence: 0.65
 
 # testing
 - Prefer UI-based test steps over CLI/curl-based test steps in test plans. Confidence: 0.60
