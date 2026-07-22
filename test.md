@@ -1915,33 +1915,15 @@ curl -s -c staff.jar -X POST http://localhost:3000/api/auth/login \
 
 # Phase 5 — Test Plan: Task Assignment
 
-## Setup Commands
+## Setup
 
 ```bash
-# Start the dev server
 npm run dev
-
-# Regenerate Prisma client after model changes
 npx prisma generate
 npx prisma migrate dev
-
-# Ensure we have test data
-curl -s -X POST http://localhost:3000/api/clients \
-  -H "Content-Type: application/json" \
-  -d '{
-    "firstName": "TaskTest", "lastName": "Client", "email": "tasktest@example.com",
-    "phone": "+5555555555", "source": "website", "createdById": 1
-  }' | jq
-
-curl -s -X POST http://localhost:3000/api/applications \
-  -H "Content-Type: application/json" \
-  -d '{
-    "clientId": <CLIENT_ID>,
-    "serviceType": "UK Tourist Visa",
-    "destinationCountry": "United Kingdom",
-    "travelPurpose": "Tourism"
-  }' | jq
 ```
+
+Before testing, log in via the browser at `http://localhost:3000` as admin (`admin@waypoint.com` / `password123`), then register a test client and create an application for them through the UI (Clients tab → Register Client, then Applications tab → New Application). This gives you real client/application records to link tasks to.
 
 ---
 
@@ -1949,108 +1931,48 @@ curl -s -X POST http://localhost:3000/api/applications \
 
 ### Test Steps
 
-1. **Prisma schema validation:**
+1. **Schema validation:**
+   - Run `npm run db:generate` — completes with "✔ Generated Prisma Client" and no errors.
+   - Run `npm run build` — compiles successfully with `/api/tasks` appearing in the route list as a dynamic route (ƒ).
 
-   ```bash
-   grep -A 20 "model Task" prisma/schema.prisma
-   ```
-   Expected: Task model with `id`, `title`, `description`, `clientId`, `applicationId`, `stage`, `assigneeId`, `assignedById`, `priority`, `status`, `dueDate`, `completedAt`, `@@map("tasks")`.
+2. **Migration applied:**
+   - Run `ls prisma/migrations/*add_task_model/migration.sql` — migration file exists.
+   - The `tasks` table appears in Prisma Studio (`npm run db:studio`) with all columns.
 
-   ```bash
-   npm run db:generate
-   ```
-   Expected: "✔ Generated Prisma Client" with no errors.
+3. **Create task through the browser console:**
+   - Open DevTools Console (F12 → Console), paste and run:
+     ```js
+     fetch("/api/tasks", {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({
+         title: "Review passport documents",
+         description: "Check passport validity",
+         clientId: 1,
+         priority: "HIGH",
+         dueDate: "2026-08-01T00:00:00.000Z"
+       })
+     }).then(r => r.json()).then(console.log)
+     ```
+   - Expected: Returns 201 with `{ task: { ... } }`. The task includes `status: "TODO"`, nested `client` object, and `assignedBy` object.
 
-2. **Migration file exists:**
+4. **List tasks:**
+   - In the console: `fetch("/api/tasks").then(r => r.json()).then(console.log)`
+   - Expected: Returns all tasks with nested `client`, `application`, `assignee`, `assignedBy`.
 
-   ```bash
-   ls prisma/migrations/*add_task_model/migration.sql
-   ```
-   Expected: Migration file creates the `tasks` table with foreign keys to `clients`, `applications`, and `users`.
+5. **Update task status:**
+   - In the console:
+     ```js
+     fetch("/api/tasks", {
+       method: "PATCH",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ id: 1, status: "IN_PROGRESS" })
+     }).then(r => r.json()).then(console.log)
+     ```
+   - Expected: Status updates to `IN_PROGRESS`. Change to `"DONE"` and `completedAt` populates.
 
-3. **API — POST /api/tasks (create task):**
-
-   ```bash
-   curl -s -X POST http://localhost:3000/api/tasks \
-     -H "Content-Type: application/json" \
-     -d '{
-       "title": "Review passport documents",
-       "description": "Check passport validity and expiry date",
-       "clientId": <CLIENT_ID>,
-       "applicationId": <APP_ID>,
-       "stage": "DOCUMENT_COLLECTION_VERIFICATION",
-       "assigneeId": 2,
-       "priority": "HIGH",
-       "dueDate": "2026-08-01T00:00:00.000Z"
-     }' | jq
-   ```
-   Expected: Returns 201. `status` defaults to `"TODO"`, `assignedBy` nested object present, `assignee` nested object present.
-
-4. **API — POST /api/tasks (validation):**
-
-   ```bash
-   # Missing required fields
-   curl -s -X POST http://localhost:3000/api/tasks \
-     -H "Content-Type: application/json" \
-     -d '{"title": "No client"}' | jq
-   ```
-   Expected: Returns 400 with `{ error: "Title and client ID are required" }`.
-
-5. **API — GET /api/tasks (list tasks):**
-
-   ```bash
-   curl -s http://localhost:3000/api/tasks | jq
-   ```
-   Expected: Returns 200 with `{ tasks: [...] }`. Each task includes nested `client`, `application`, `assignee`, and `assignedBy`.
-
-6. **API — PATCH /api/tasks (update task):**
-
-   ```bash
-   # Update status to IN_PROGRESS
-   curl -s -X PATCH http://localhost:3000/api/tasks \
-     -H "Content-Type: application/json" \
-     -d '{"id": 1, "status": "IN_PROGRESS"}' | jq
-   ```
-   Expected: Returns 200. `status` is now `"IN_PROGRESS"`, `completedAt` remains `null`.
-
-   ```bash
-   # Mark as done
-   curl -s -X PATCH http://localhost:3000/api/tasks \
-     -H "Content-Type: application/json" \
-     -d '{"id": 1, "status": "DONE"}' | jq
-   ```
-   Expected: Returns 200. `status` is `"DONE"`, `completedAt` is set to the current timestamp.
-
-   ```bash
-   # Update priority and reassign
-   curl -s -X PATCH http://localhost:3000/api/tasks \
-     -H "Content-Type: application/json" \
-     -d '{"id": 1, "priority": "URGENT", "assigneeId": 2}' | jq
-   ```
-   Expected: Returns 200. `priority` is `"URGENT"`, `assignee` is updated.
-
-   ```bash
-   # Missing id
-   curl -s -X PATCH http://localhost:3000/api/tasks \
-     -H "Content-Type: application/json" \
-     -d '{"title": "No ID"}' | jq
-   ```
-   Expected: Returns 400 with `{ error: "Task ID is required" }`.
-
-   ```bash
-   # Non-existent task
-   curl -s -X PATCH http://localhost:3000/api/tasks \
-     -H "Content-Type: application/json" \
-     -d '{"id": 9999, "status": "DONE"}' | jq
-   ```
-   Expected: Returns 404 with `{ error: "Task not found" }`.
-
-7. **Build verification:**
-
-   ```bash
-   npm run build
-   ```
-   Expected: "✓ Compiled successfully". `/api/tasks` appears as a dynamic route (ƒ).
+6. **Build verification:**
+   - `npm run build` — compiles successfully.
 
 ---
 
@@ -2058,68 +1980,47 @@ curl -s -X POST http://localhost:3000/api/applications \
 
 ### Test Steps
 
-1. **Tasks tab visible for both roles:**
-
+1. **Navigation and role visibility:**
    - Log in as admin — "Tasks" appears in the sidebar.
-   - Log in as staff — "Tasks" appears in the sidebar.
-   - Click "Tasks" — the Task Manager page loads with header "Task Manager".
+   - Log out, log in as staff (`staff@waypoint.com` / `password123`) — "Tasks" appears in the sidebar for both roles.
+   - Click "Tasks" — the Task Manager page loads with the heading "Task Manager" and subtitle "Assign, update, and track workload deliverables."
 
 2. **Admin sees "Create Task" button:**
-
-   - Log in as admin — a "Create Task" button is visible in the top-right area.
-
-   ```bash
-   # Verify the button is only for admins
-   grep -n "role.*ADMIN.*Create Task\|Create Task.*ADMIN" src/app/page.tsx
-   ```
-   Expected: The Create Task button is wrapped in `{user?.role === "ADMIN" && (`.
+   - As admin, the "+ Create Task" button is visible in the top-right area.
+   - Log out, log in as staff — the "Create Task" button is NOT visible.
 
 3. **Opening the creation modal:**
+   - Click "+ Create Task" — a modal overlay appears with the heading "Create New Task".
+   - A "Cancel" button sits in the top-right corner. Click it — the modal closes.
+   - Re-open the modal and verify all form fields are present:
+     - Title * (text input with placeholder "e.g. Review passport documents")
+     - Description (textarea with placeholder "Task details and instructions...")
+     - Client * (dropdown: all clients listed as "WP-XXXX-YYYY — FirstName LastName")
+     - Application (dropdown — filters to only show apps for the selected client)
+     - Workflow Stage (dropdown — lists all 12 stage labels from Client Inquiry to Visa Refused Path)
+     - Assignee (dropdown — all staff users, default "Unassigned")
+     - Priority (dropdown: Low, Medium, High, Urgent, default "Medium")
+     - Due Date (date picker)
 
-   - Click "Create Task" — a modal overlay appears with heading "Create New Task".
-   - Modal has a "Cancel" button in the top-right.
-   - Form fields: Title (required), Description (textarea), Client (dropdown), Application (dropdown), Workflow Stage (dropdown), Assignee (dropdown), Priority (dropdown), Due Date.
+4. **Creating a task with required fields:**
+   - Fill in: Title "Collect passport scans", select a client, leave everything else default.
+   - Click "Create Task" — loading spinner appears on the button.
+   - Success message: "Task created successfully!" appears in a green banner.
+   - The modal fields reset and the new task appears in the task table.
 
-4. **Creating a task:**
+5. **Creating a task with all fields:**
+   - Re-open the modal, fill in every field: title, description, client, application, stage, assignee, priority, due date.
+   - Submit — loading spinner, success message, task appears in the table with all data visible.
 
-   ```bash
-   # Create via the UI, or test via API:
-   curl -s -X POST http://localhost:3000/api/tasks \
-     -H "Content-Type: application/json" \
-     -d '{
-       "title": "Review passport documents",
-       "description": "Check passport validity and expiry date",
-       "clientId": 1,
-       "applicationId": 1,
-       "stage": "DOCUMENT_COLLECTION_VERIFICATION",
-       "assigneeId": 2,
-       "priority": "HIGH",
-       "dueDate": "2026-08-01T00:00:00.000Z"
-     }' | jq
-   ```
-   Expected: Returns 201. Task appears in the tasks table.
-
-5. **Tasks table displays correctly:**
-
+6. **Tasks table display:**
    - Columns: Task, Client, Stage, Assignee, Priority, Due, Status.
-   - Priority is color-coded: URGENT (red), HIGH (orange), MEDIUM (blue), LOW (muted).
-   - Status is color-coded: DONE (green), IN_PROGRESS (blue), WAITING (yellow), CANCELLED (red), TODO (muted).
-   - Stage column shows human-readable stage label from `STAGE_LABELS`.
-   - Due date formatted as "DD Mon".
+   - Priority badges are color-coded: Urgent (red), High (orange), Medium (blue), Low (grey).
+   - Status column shows an interactive dropdown, not static text.
+   - Stage column shows human-readable labels (e.g. "Document Collection & Verification" not `DOCUMENT_COLLECTION_VERIFICATION`).
+   - Due date formatted as "01 Aug 26".
 
-6. **Client dropdown populated:**
-
-   - The Client dropdown in the create modal lists all clients as "WP-XXXX-YYYY — FirstName LastName".
-
-7. **Application dropdown filtered by client:**
-
-   - Selecting a client filters the Application dropdown to only show applications for that client.
-
-8. **Staff does NOT see "Create Task" button:**
-
-   - Log in as staff (`staff@waypoint.com` / `password123`).
-   - Navigate to Tasks tab.
-   - The "Create Task" button is not visible.
+7. **Empty state:**
+   - If no tasks exist in the database, the table area shows a dashed-border box with a CheckSquare icon and text "No tasks yet — Create a task to get started".
 
 ---
 
@@ -2128,42 +2029,147 @@ curl -s -X POST http://localhost:3000/api/applications \
 ### Test Steps
 
 1. **Dashboard loads live data:**
-
-   - Log in as admin and navigate to Dashboard.
-   - "Active Client Profiles" card shows the count from `/api/clients`.
-
-   ```bash
-   curl -s http://localhost:3000/api/clients | jq '.clients | length'
-   ```
+   - Log in as admin and navigate to the Dashboard tab.
+   - Four metric cards display real counts:
+     - "Active Client Profiles" — matches the number of clients in the database.
+     - "Visa Processing Pipeline" — matches the number of applications.
+     - "Active Tasks" — counts tasks with status TODO or IN_PROGRESS.
+     - "Overdue Staff Tasks" — counts tasks where the due date has passed and the task is not DONE or CANCELLED.
+   - Create a new client or task, then return to Dashboard — the counts update.
 
 2. **Pipeline Overview panel:**
-
-   - Shows each workflow stage with a count of applications in that stage.
-   - Counts match the actual application data.
-
-   ```bash
-   curl -s http://localhost:3000/api/applications | jq '.applications | group_by(.currentStage) | map({stage: .[0].currentStage, count: length})'
-   ```
+   - Shows each workflow stage (Client Inquiry through Application Tracking — 10 stages) with a count of applications at that stage.
+   - Counts match the Pipeline tab.
 
 3. **High-Priority Tasks panel:**
-
    - Shows active tasks (not DONE and not CANCELLED), limited to 6 items.
-   - Each task shows title, client name, and a color-coded priority badge.
-   - Priority colors: URGENT (red), HIGH (orange), MEDIUM/LOW (blue).
+   - Each task shows: title, client name, and a color-coded priority badge.
+   - Priority colors: URGENT (red background), HIGH (orange), MEDIUM/LOW (blue).
+   - If no active tasks exist, the panel shows "No active tasks".
 
 4. **Recent Tasks table:**
+   - Shows up to 5 most recent tasks with columns: Task, Client, Assignee, Priority, Status.
+   - A "View All" link in the header — clicking it navigates to the Tasks tab.
+   - If no tasks exist, the table shows "No tasks yet".
 
-   - Shows 5 most recent tasks.
-   - Columns: Task, Client, Assignee, Priority, Status.
-   - "View All" link navigates to the Tasks tab.
+5. **Staff user sees scoped data:**
+   - Log in as staff and navigate to Dashboard.
+   - Staff only sees tasks assigned to them in both the High-Priority panel and the Recent Tasks table.
 
-5. **Overdue counter is accurate:**
+---
 
-   - "Overdue Staff Tasks" card counts tasks where `dueDate < now` AND `status !== "DONE"` AND `status !== "CANCELLED"`.
+## Task 4 — Task status updates and completion flow
 
-6. **Build verification:**
+### Test Steps
 
-   ```bash
-   npm run build
-   ```
-   Expected: "✓ Compiled successfully" with no errors.
+1. **Inline status dropdown:**
+   - Navigate to the Tasks tab.
+   - Each task row has a status dropdown (not a static badge) with 5 options: To Do, In Progress, Waiting, Done, Cancelled.
+   - The dropdown background color matches the current status: green for Done, blue for In Progress, yellow for Waiting, red for Cancelled, grey for To Do.
+
+2. **Change status inline:**
+   - Find a task with status "To Do" (grey dropdown).
+   - Change it to "In Progress" — the dropdown updates immediately with the blue background.
+   - Refresh the page (F5) — the change persists.
+
+3. **Mark as Done:**
+   - Change a task to "Done" — the dropdown turns green.
+   - The task disappears from the Dashboard's "Active Tasks" count and "High-Priority Tasks" panel.
+
+4. **Reopen a completed task:**
+   - Change a Done task back to "To Do".
+   - The dropdown returns to the grey To Do color.
+   - The task reappears in the Dashboard's active counts.
+
+5. **Cancel a task:**
+   - Change a task to "Cancelled" — the dropdown turns red.
+   - Cancelled tasks no longer count as "Active Tasks" or "Overdue" on the Dashboard.
+
+6. **No page reload:**
+   - Change statuses on 3 different tasks in quick succession — each updates instantly without a full page refresh.
+
+---
+
+## Task 5 — Overdue task indicators and filters
+
+### Test Steps
+
+1. **Create an overdue task:**
+   - Open the Create Task modal.
+   - Set a due date in the past (e.g. 1 January 2024).
+   - Leave status as To Do (default).
+   - Submit.
+
+2. **Overdue visual indicators:**
+   - On the Tasks tab, locate the overdue task.
+   - Its row has a red-tinted background (subtle red highlight).
+   - The due date column shows the date in red text with a red "OVERDUE" badge next to it.
+
+3. **Mark overdue task as Done:**
+   - Change the overdue task's status to "Done".
+   - The red tint and "OVERDUE" badge disappear immediately — completed tasks are never shown as overdue.
+
+4. **Search bar:**
+   - In the search input, type a partial task title — only matching tasks appear.
+   - Type a client's first name — tasks for matching clients appear.
+   - Type a file number (e.g. "WP-2026") — matching tasks appear.
+   - Clear the search field — all tasks reappear.
+
+5. **Status filter:**
+   - Select "To Do" from the Status dropdown — only TODO tasks are shown.
+   - Select "Overdue" — only tasks with past due dates that aren't Done or Cancelled appear.
+   - Select "In Progress" — only IN_PROGRESS tasks appear.
+   - Select "All Statuses" — all tasks return.
+
+6. **Priority filter:**
+   - Select "Urgent" — only URGENT tasks appear.
+   - Select "High" — only HIGH tasks appear.
+   - Select "Low" — only LOW tasks appear.
+   - Select "All Priorities" — all tasks return.
+
+7. **Combined filters:**
+   - Set Status to "To Do" and Priority to "High".
+   - Only tasks matching both criteria appear.
+   - A "Clear filters" link appears below the filter bar.
+   - Click "Clear filters" — search clears, both dropdowns reset to "All Statuses" / "All Priorities", all tasks shown, clear link disappears.
+
+8. **Filtered empty state:**
+   - Apply a filter combination that matches nothing (e.g. search for "zzzz").
+   - A search icon and text "No tasks match your filters" appear with a suggestion to adjust criteria.
+
+9. **Dashboard overdue counter:**
+   - Return to the Dashboard tab.
+   - The "Overdue Staff Tasks" card shows the correct count of overdue tasks.
+
+---
+
+## Task 6 — Link tasks to workflows and client profile
+
+### Test Steps
+
+1. **Client name links to profile:**
+   - On the Tasks tab, click a client's name in the Client column.
+   - The view switches to that client's detailed profile page (initials avatar, full name, file number, contact info, personal details).
+   - Click "← Back to Client List" to return to the client list.
+
+2. **Client profile shows associated tasks:**
+   - Navigate to a client's profile (Clients tab → "View File" on any client).
+   - Scroll down past Contact Info, Personal Details, and Record Details — a "Tasks" card appears with a check-square icon in the heading.
+   - Each task row shows: title, assignee name, workflow stage (if set), priority badge (colored), and status badge (colored).
+   - If no tasks exist for this client, the card shows "No tasks for this client".
+
+3. **Create a stage-linked task:**
+   - Open the Create Task modal.
+   - Select a client, then in the Workflow Stage dropdown, select "Document Collection & Verification".
+   - Submit.
+   - Verify the stage appears in both the Tasks table and the Client Profile tasks card, using the human-readable label "Document Collection & Verification".
+
+4. **Application dropdown filters by client:**
+   - Open the Create Task modal.
+   - Select a client — the Application dropdown updates to show only applications belonging to that client.
+   - If the client has no applications, the dropdown only shows "None".
+   - Change the selected client — the Application dropdown re-filters to show the new client's applications.
+
+5. **Build verification:**
+   - `npm run build` — compiles successfully with no errors.
+
