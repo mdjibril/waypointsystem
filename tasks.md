@@ -132,12 +132,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| [ ] Create document and checklist template database models | Developer 2 | `feature/document-models` | Application model |
-| [ ] Build admin document checklist template management | Developer 1 | `feature/document-template-admin` | Document models |
-| [ ] Build document upload UI on application/client profile | Developer 2 | `feature/document-upload` | Document models, client profile |
-| [ ] Add document verification status and notes | Developer 2 | `feature/document-verification` | Document upload |
-| [ ] Build document review queue for admin/senior staff | Developer 1 | `feature/document-review-queue` | Document verification |
-| [ ] Add missing document indicators to workflow and dashboard | Developer 1 | `feature/document-metrics` | Document verification |
+| [x] Create document and checklist template database models | Developer 2 | `feature/document-models` | Application model |
+| [x] Build admin document checklist template management | Developer 1 | `feature/document-template-admin` | Document models |
+| [x] Build document upload UI on application/client profile | Developer 2 | `feature/document-upload` | Document models, client profile |
+| [x] Add document verification status and notes | Developer 2 | `feature/document-verification` | Document upload |
+| [x] Build document review queue for admin/senior staff | Developer 1 | `feature/document-review-queue` | Document verification |
+| [x] Add missing document indicators to workflow and dashboard | Developer 1 | `feature/document-metrics` | Document verification |
 
 Merge order:
 
