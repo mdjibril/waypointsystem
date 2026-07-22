@@ -281,6 +281,7 @@ export default function Home() {
   // Fetch single client for profile view
   const viewClientProfile = async (clientId: number) => {
     setClientProfileLoading(true);
+    setCurrentTab("clients");
     try {
       const res = await fetch(`/api/clients`);
       const data = await res.json();
@@ -1200,52 +1201,6 @@ export default function Home() {
                       setClientFilterStaff("all");
                     }}
                     className="text-[10px] text-muted-foreground hover:text-foreground font-semibold underline cursor-pointer"
-                  >
-                    Clear filters
-                  </button>
-                )}
-              </div>
-
-              {/* Task Filters */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="relative flex-1 min-w-48">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={taskSearch}
-                    onChange={(e) => setTaskSearch(e.target.value)}
-                    placeholder="Search tasks..."
-                    className="w-full pl-9 pr-4 py-2 bg-muted/20 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
-                  />
-                </div>
-                <select
-                  value={taskFilterStatus}
-                  onChange={(e) => setTaskFilterStatus(e.target.value)}
-                  className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="TODO">To Do</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="WAITING">Waiting</option>
-                  <option value="DONE">Done</option>
-                  <option value="CANCELLED">Cancelled</option>
-                  <option value="OVERDUE">Overdue</option>
-                </select>
-                <select
-                  value={taskFilterPriority}
-                  onChange={(e) => setTaskFilterPriority(e.target.value)}
-                  className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
-                >
-                  <option value="all">All Priorities</option>
-                  <option value="URGENT">Urgent</option>
-                  <option value="HIGH">High</option>
-                  <option value="MEDIUM">Medium</option>
-                  <option value="LOW">Low</option>
-                </select>
-                {(taskSearch || taskFilterStatus !== "all" || taskFilterPriority !== "all") && (
-                  <button
-                    onClick={() => { setTaskSearch(""); setTaskFilterStatus("all"); setTaskFilterPriority("all"); }}
-                    className="text-[10px] font-semibold text-primary hover:underline cursor-pointer"
                   >
                     Clear filters
                   </button>
@@ -2316,6 +2271,52 @@ export default function Home() {
                 >
                   <Plus className="h-4 w-4" /> Create Task
                 </button>
+                )}
+              </div>
+
+              {/* Task Filters */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative flex-1 min-w-48">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={taskSearch}
+                    onChange={(e) => setTaskSearch(e.target.value)}
+                    placeholder="Search tasks by title, client name, or file number..."
+                    className="w-full pl-9 pr-4 py-2 bg-muted/20 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                  />
+                </div>
+                <select
+                  value={taskFilterStatus}
+                  onChange={(e) => setTaskFilterStatus(e.target.value)}
+                  className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="TODO">To Do</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="WAITING">Waiting</option>
+                  <option value="DONE">Done</option>
+                  <option value="CANCELLED">Cancelled</option>
+                  <option value="OVERDUE">Overdue</option>
+                </select>
+                <select
+                  value={taskFilterPriority}
+                  onChange={(e) => setTaskFilterPriority(e.target.value)}
+                  className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                >
+                  <option value="all">All Priorities</option>
+                  <option value="URGENT">Urgent</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
+                </select>
+                {(taskSearch || taskFilterStatus !== "all" || taskFilterPriority !== "all") && (
+                  <button
+                    onClick={() => { setTaskSearch(""); setTaskFilterStatus("all"); setTaskFilterPriority("all"); }}
+                    className="text-[10px] font-semibold text-primary hover:underline cursor-pointer"
+                  >
+                    Clear filters
+                  </button>
                 )}
               </div>
 
