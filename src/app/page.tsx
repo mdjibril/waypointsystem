@@ -221,6 +221,9 @@ export default function Home() {
   const [addTaskError, setAddTaskError] = useState<string | null>(null);
   const [addTaskSuccess, setAddTaskSuccess] = useState<string | null>(null);
   const [addTaskLoading, setAddTaskLoading] = useState(false);
+  const [taskSearch, setTaskSearch] = useState("");
+  const [taskFilterStatus, setTaskFilterStatus] = useState("all");
+  const [taskFilterPriority, setTaskFilterPriority] = useState("all");
 
   // Sync profile fields when user is loaded
   useEffect(() => {
@@ -284,6 +287,12 @@ export default function Home() {
       if (res.ok) {
         const client = data.clients.find((c: any) => c.id === clientId);
         setSelectedClient(client || null);
+      }
+      // Also fetch tasks for this client
+      const tasksRes = await fetch("/api/tasks");
+      const tasksData = await tasksRes.json();
+      if (tasksRes.ok) {
+        setTasks(tasksData.tasks);
       }
     } catch (err) {
       console.error("Failed to load client profile:", err);
@@ -1197,6 +1206,52 @@ export default function Home() {
                 )}
               </div>
 
+              {/* Task Filters */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative flex-1 min-w-48">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={taskSearch}
+                    onChange={(e) => setTaskSearch(e.target.value)}
+                    placeholder="Search tasks..."
+                    className="w-full pl-9 pr-4 py-2 bg-muted/20 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                  />
+                </div>
+                <select
+                  value={taskFilterStatus}
+                  onChange={(e) => setTaskFilterStatus(e.target.value)}
+                  className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="TODO">To Do</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="WAITING">Waiting</option>
+                  <option value="DONE">Done</option>
+                  <option value="CANCELLED">Cancelled</option>
+                  <option value="OVERDUE">Overdue</option>
+                </select>
+                <select
+                  value={taskFilterPriority}
+                  onChange={(e) => setTaskFilterPriority(e.target.value)}
+                  className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                >
+                  <option value="all">All Priorities</option>
+                  <option value="URGENT">Urgent</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
+                </select>
+                {(taskSearch || taskFilterStatus !== "all" || taskFilterPriority !== "all") && (
+                  <button
+                    onClick={() => { setTaskSearch(""); setTaskFilterStatus("all"); setTaskFilterPriority("all"); }}
+                    className="text-[10px] font-semibold text-primary hover:underline cursor-pointer"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+
               {/* Add Client Modal */}
               {isAddClientOpen && (
                 <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
@@ -1750,6 +1805,45 @@ export default function Home() {
                     <p className="font-semibold text-foreground font-mono">#{selectedClient.id}</p>
                   </div>
                 </div>
+              </div>
+
+              {/* Client Tasks */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <CheckSquare className="h-4 w-4 text-primary" /> Tasks
+                </h4>
+                {tasks.filter((t: any) => t.clientId === selectedClient.id).length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center">No tasks for this client</p>
+                ) : (
+                  <div className="space-y-2">
+                    {tasks.filter((t: any) => t.clientId === selectedClient.id).map((t: any) => (
+                      <div key={t.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-primary/50 transition-colors bg-muted/10">
+                        <div>
+                          <p className="text-xs font-bold text-foreground">{t.title}</p>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className="text-[10px] text-muted-foreground">{t.assignee?.name || "Unassigned"}</span>
+                            {t.stage && (
+                              <span className="text-[10px] text-muted-foreground">{STAGE_LABELS[t.stage as keyof typeof STAGE_LABELS] || t.stage}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            t.priority === "URGENT" ? "bg-red-500/10 text-red-600" :
+                            t.priority === "HIGH" ? "bg-orange-500/10 text-orange-600" :
+                            "bg-blue-500/10 text-blue-600"
+                          }`}>{t.priority}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            t.status === "DONE" ? "bg-green-500/10 text-green-600" :
+                            t.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
+                            t.status === "WAITING" ? "bg-yellow-500/10 text-yellow-600" :
+                            "bg-muted text-muted-foreground"
+                          }`}>{t.status.replace(/_/g, " ")}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ) : null}
@@ -2398,89 +2492,124 @@ export default function Home() {
                   <p className="text-xs text-muted-foreground/60 mt-1">Create a task to get started</p>
                 </div>
               ) : (
-                <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/20">
-                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Task</th>
-                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Client</th>
-                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Stage</th>
-                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Assignee</th>
-                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Priority</th>
-                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Due</th>
-                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tasks.map((t: any) => (
-                          <tr key={t.id} className="border-b border-border/60 hover:bg-muted/10 transition-colors">
-                            <td className="p-4">
-                              <p className="font-bold text-foreground">{t.title}</p>
-                              {t.description && (
-                                <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-xs">{t.description}</p>
-                              )}
-                            </td>
-                            <td className="p-4">
-                              <p className="font-semibold text-foreground">{t.client?.firstName} {t.client?.lastName}</p>
-                              <p className="text-[10px] text-muted-foreground font-mono">{t.client?.fileNumber}</p>
-                            </td>
-                            <td className="p-4">
-                              {t.stage ? (
-                                <span className="text-[10px] font-semibold text-foreground">{STAGE_LABELS[t.stage as keyof typeof STAGE_LABELS] || t.stage}</span>
-                              ) : (
-                                <span className="text-[10px] text-muted-foreground">—</span>
-                              )}
-                            </td>
-                            <td className="p-4">
-                              {t.assignee ? (
-                                <span className="text-[10px] font-semibold text-foreground">{t.assignee.name}</span>
-                              ) : (
-                                <span className="text-[10px] text-muted-foreground">Unassigned</span>
-                              )}
-                            </td>
-                            <td className="p-4">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                t.priority === "URGENT" ? "bg-red-500/10 text-red-600" :
-                                t.priority === "HIGH" ? "bg-orange-500/10 text-orange-600" :
-                                t.priority === "MEDIUM" ? "bg-blue-500/10 text-blue-600" :
-                                "bg-muted text-muted-foreground"
-                              }`}>
-                                {t.priority}
-                              </span>
-                            </td>
-                            <td className="p-4">
-                              <span className="text-[10px] font-semibold text-foreground">
-                                {t.dueDate
-                                  ? new Date(t.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
-                                  : "—"}
-                              </span>
-                            </td>
-                            <td className="p-4">
-                              <select
-                                value={t.status}
-                                onChange={(e) => handleUpdateTaskStatus(t.id, e.target.value)}
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border-none cursor-pointer ${
-                                  t.status === "DONE" ? "bg-green-500/10 text-green-600" :
-                                  t.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
-                                  t.status === "WAITING" ? "bg-yellow-500/10 text-yellow-600" :
-                                  t.status === "CANCELLED" ? "bg-red-500/10 text-red-600" :
-                                  "bg-muted text-muted-foreground"
-                                }`}
-                              >
-                                <option value="TODO">To Do</option>
-                                <option value="IN_PROGRESS">In Progress</option>
-                                <option value="WAITING">Waiting</option>
-                                <option value="DONE">Done</option>
-                                <option value="CANCELLED">Cancelled</option>
-                              </select>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                (() => {
+                  const filteredTasks = tasks.filter((t: any) => {
+                    const matchesSearch = !taskSearch ||
+                      t.title.toLowerCase().includes(taskSearch.toLowerCase()) ||
+                      (t.client?.firstName || "").toLowerCase().includes(taskSearch.toLowerCase()) ||
+                      (t.client?.lastName || "").toLowerCase().includes(taskSearch.toLowerCase()) ||
+                      (t.client?.fileNumber || "").toLowerCase().includes(taskSearch.toLowerCase());
+                    const matchesStatus = taskFilterStatus === "all" ||
+                      (taskFilterStatus === "OVERDUE" ? t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "DONE" && t.status !== "CANCELLED" : t.status === taskFilterStatus);
+                    const matchesPriority = taskFilterPriority === "all" || t.priority === taskFilterPriority;
+                    return matchesSearch && matchesStatus && matchesPriority;
+                  });
+
+                  if (filteredTasks.length === 0) {
+                    return (
+                      <div className="bg-card border border-dashed border-border rounded-2xl py-20 flex flex-col items-center justify-center text-center">
+                        <Search className="h-12 w-12 text-muted-foreground/30 mb-3" />
+                        <p className="text-sm font-bold text-muted-foreground">No tasks match your filters</p>
+                        <p className="text-xs text-muted-foreground/60 mt-1">Try adjusting your search or filter criteria</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-border bg-muted/20">
+                              <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Task</th>
+                              <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Client</th>
+                              <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Stage</th>
+                              <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Assignee</th>
+                              <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Priority</th>
+                              <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Due</th>
+                              <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredTasks.map((t: any) => {
+                              const isOverdue = t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "DONE" && t.status !== "CANCELLED";
+                              return (
+                                <tr key={t.id} className={`border-b border-border/60 hover:bg-muted/10 transition-colors ${isOverdue ? "bg-red-500/5" : ""}`}>
+                                  <td className="p-4">
+                                    <p className="font-bold text-foreground">{t.title}</p>
+                                    {t.description && (
+                                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-xs">{t.description}</p>
+                                    )}
+                                  </td>
+                                  <td className="p-4">
+                                    <button
+                                      onClick={() => viewClientProfile(t.clientId)}
+                                      className="text-left hover:text-primary transition-colors cursor-pointer"
+                                    >
+                                      <p className="font-semibold text-foreground">{t.client?.firstName} {t.client?.lastName}</p>
+                                      <p className="text-[10px] text-muted-foreground font-mono">{t.client?.fileNumber}</p>
+                                    </button>
+                                  </td>
+                                  <td className="p-4">
+                                    {t.stage ? (
+                                      <span className="text-[10px] font-semibold text-foreground">{STAGE_LABELS[t.stage as keyof typeof STAGE_LABELS] || t.stage}</span>
+                                    ) : (
+                                      <span className="text-[10px] text-muted-foreground">—</span>
+                                    )}
+                                  </td>
+                                  <td className="p-4">
+                                    {t.assignee ? (
+                                      <span className="text-[10px] font-semibold text-foreground">{t.assignee.name}</span>
+                                    ) : (
+                                      <span className="text-[10px] text-muted-foreground">Unassigned</span>
+                                    )}
+                                  </td>
+                                  <td className="p-4">
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                      t.priority === "URGENT" ? "bg-red-500/10 text-red-600" :
+                                      t.priority === "HIGH" ? "bg-orange-500/10 text-orange-600" :
+                                      t.priority === "MEDIUM" ? "bg-blue-500/10 text-blue-600" :
+                                      "bg-muted text-muted-foreground"
+                                    }`}>
+                                      {t.priority}
+                                    </span>
+                                  </td>
+                                  <td className="p-4">
+                                    <span className={`text-[10px] font-semibold ${isOverdue ? "text-red-500" : "text-foreground"}`}>
+                                      {t.dueDate
+                                        ? new Date(t.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" })
+                                        : "—"}
+                                      {isOverdue && <span className="ml-1 text-[8px] font-bold bg-red-500/10 text-red-500 px-1 py-0.5 rounded">OVERDUE</span>}
+                                    </span>
+                                  </td>
+                                  <td className="p-4">
+                                    <select
+                                      value={t.status}
+                                      onChange={(e) => handleUpdateTaskStatus(t.id, e.target.value)}
+                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border-none cursor-pointer ${
+                                        t.status === "DONE" ? "bg-green-500/10 text-green-600" :
+                                        t.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
+                                        t.status === "WAITING" ? "bg-yellow-500/10 text-yellow-600" :
+                                        t.status === "CANCELLED" ? "bg-red-500/10 text-red-600" :
+                                        "bg-muted text-muted-foreground"
+                                      }`}
+                                    >
+                                      <option value="TODO">To Do</option>
+                                      <option value="IN_PROGRESS">In Progress</option>
+                                      <option value="WAITING">Waiting</option>
+                                      <option value="DONE">Done</option>
+                                      <option value="CANCELLED">Cancelled</option>
+                                    </select>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()
               )}
             </div>
           )}
