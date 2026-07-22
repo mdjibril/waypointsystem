@@ -225,6 +225,18 @@ export default function Home() {
   const [taskFilterStatus, setTaskFilterStatus] = useState("all");
   const [taskFilterPriority, setTaskFilterPriority] = useState("all");
 
+  // Document Management State
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [documentTemplates, setDocumentTemplates] = useState<any[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [isAddTemplateOpen, setIsAddTemplateOpen] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplateServiceType, setNewTemplateServiceType] = useState("");
+  const [newTemplateDestination, setNewTemplateDestination] = useState("");
+  const [newTemplateRequired, setNewTemplateRequired] = useState(true);
+  const [addTemplateError, setAddTemplateError] = useState<string | null>(null);
+  const [addTemplateLoading, setAddTemplateLoading] = useState(false);
+
   // Sync profile fields when user is loaded
   useEffect(() => {
     if (user) {
@@ -354,6 +366,31 @@ export default function Home() {
       fetchTasks();
       if (clients.length === 0) fetchClients();
       if (applications.length === 0) fetchApplications();
+    }
+  }, [currentTab]);
+
+  // Load documents and templates when Documents tab is selected
+  const fetchDocuments = async () => {
+    setDocumentsLoading(true);
+    try {
+      const [docsRes, tmplRes] = await Promise.all([
+        fetch("/api/documents"),
+        fetch("/api/documents/templates"),
+      ]);
+      const docsData = await docsRes.json();
+      const tmplData = await tmplRes.json();
+      if (docsRes.ok) setDocuments(docsData.documents);
+      if (tmplRes.ok) setDocumentTemplates(tmplData.templates);
+    } catch (err) {
+      console.error("Failed to load documents:", err);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentTab === "documents") {
+      fetchDocuments();
     }
   }, [currentTab]);
 
@@ -790,6 +827,42 @@ export default function Home() {
       setAddTaskError("Connection error. Please try again.");
     } finally {
       setAddTaskLoading(false);
+    }
+  };
+
+  const handleCreateTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddTemplateLoading(true);
+    setAddTemplateError(null);
+
+    try {
+      const res = await fetch("/api/documents/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newTemplateName,
+          serviceType: newTemplateServiceType || undefined,
+          destinationCountry: newTemplateDestination || undefined,
+          isRequired: newTemplateRequired,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setAddTemplateError(data.error || "Failed to create template");
+      } else {
+        setNewTemplateName("");
+        setNewTemplateServiceType("");
+        setNewTemplateDestination("");
+        setNewTemplateRequired(true);
+        setIsAddTemplateOpen(false);
+        fetchDocuments();
+      }
+    } catch (err) {
+      setAddTemplateError("Connection error. Please try again.");
+    } finally {
+      setAddTemplateLoading(false);
     }
   };
 
@@ -2617,56 +2690,177 @@ export default function Home() {
 
           {currentTab === "documents" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div>
-                <h3 className="text-lg font-bold text-foreground">Document Management</h3>
-                <p className="text-xs text-muted-foreground">Manage checklists and inspect uploaded client files.</p>
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">Document Management</h3>
+                  <p className="text-xs text-muted-foreground">Manage checklists and inspect uploaded client files.</p>
+                </div>
+                {user?.role === "ADMIN" && (
+                <button
+                  onClick={() => {
+                    setIsAddTemplateOpen(true);
+                    setAddTemplateError(null);
+                  }}
+                  className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" /> Add Template
+                </button>
+                )}
               </div>
 
-              {/* Document Layout Skeleton */}
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                {/* Checklists template panel */}
-                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
-                  <h4 className="font-bold text-xs text-foreground mb-3 uppercase tracking-wider">Checklist Templates</h4>
-                  <div className="space-y-2">
-                    {["UK Tourist Visa", "Canada Study Permit", "Schengen Business Visa", "USA Tourism B1/B2"].map((temp, i) => (
-                      <button key={i} className="w-full text-left p-2.5 text-xs rounded-lg hover:bg-secondary font-medium transition-colors">
-                        {temp}
+              {/* Add Template Modal */}
+              {isAddTemplateOpen && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                  <div className="bg-card border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
+                      <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                        <Plus className="h-4 w-4 text-primary" /> Add Checklist Item
+                      </h4>
+                      <button
+                        onClick={() => setIsAddTemplateOpen(false)}
+                        className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer"
+                      >
+                        Cancel
                       </button>
-                    ))}
+                    </div>
+                    <form onSubmit={handleCreateTemplate} className="p-6 space-y-4">
+                      {addTemplateError && (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+                          {addTemplateError}
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Document Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newTemplateName}
+                          onChange={(e) => setNewTemplateName(e.target.value)}
+                          placeholder="e.g. Valid Passport"
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Service Type</label>
+                        <select
+                          value={newTemplateServiceType}
+                          onChange={(e) => setNewTemplateServiceType(e.target.value)}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        >
+                          <option value="">All Service Types</option>
+                          <option value="UK Tourist Visa">UK Tourist Visa</option>
+                          <option value="Canada Study Permit">Canada Study Permit</option>
+                          <option value="Schengen Tourist Visa">Schengen Tourist Visa</option>
+                          <option value="USA B1/B2 Visa">USA B1/B2 Visa</option>
+                          <option value="Australia Visitor Visa">Australia Visitor Visa</option>
+                          <option value="UK Student Visa">UK Student Visa</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Destination Country</label>
+                        <input
+                          type="text"
+                          value={newTemplateDestination}
+                          onChange={(e) => setNewTemplateDestination(e.target.value)}
+                          placeholder="e.g. United Kingdom"
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={newTemplateRequired}
+                          onChange={(e) => setNewTemplateRequired(e.target.checked)}
+                          className="rounded"
+                        />
+                        <label className="text-xs text-foreground">Required document</label>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={addTemplateLoading}
+                        className="w-full bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center justify-center gap-2 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {addTemplateLoading ? (
+                          <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                        ) : (
+                          <>Add Template</>
+                        )}
+                      </button>
+                    </form>
                   </div>
                 </div>
+              )}
 
-                {/* Queue list */}
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                {/* Templates panel */}
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+                  <h4 className="font-bold text-xs text-foreground mb-3 uppercase tracking-wider">Checklist Templates</h4>
+                  {documentTemplates.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-4">No templates yet</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {documentTemplates.map((tpl: any) => (
+                        <div key={tpl.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-secondary text-xs">
+                          <div>
+                            <p className="font-medium text-foreground">{tpl.name}</p>
+                            {tpl.serviceType && (
+                              <p className="text-[10px] text-muted-foreground">{tpl.serviceType}</p>
+                            )}
+                          </div>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                            tpl.isRequired ? "bg-red-500/10 text-red-500" : "bg-muted text-muted-foreground"
+                          }`}>
+                            {tpl.isRequired ? "Required" : "Optional"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Documents queue */}
                 <div className="lg:col-span-3 bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <div className="flex justify-between items-center mb-4">
                     <span className="font-bold text-xs text-foreground">Uploaded Documents Queue</span>
-                    <span className="text-[10px] text-muted-foreground">Showing 3 files</span>
+                    <span className="text-[10px] text-muted-foreground">{documents.length} files</span>
                   </div>
-                  <div className="space-y-4">
-                    {[
-                      { file: "passport_main_page.pdf", size: "2.4 MB", client: "David Miller", status: "VERIFIED" },
-                      { file: "bank_statement_6m.pdf", size: "8.1 MB", client: "Samantha Cooper", status: "PENDING" },
-                      { file: "travel_insurance_certificate.pdf", size: "1.2 MB", client: "Alice Green", status: "REJECTED" }
-                    ].map((d, i) => (
-                      <div key={i} className="flex justify-between items-center border border-border/60 p-3 rounded-xl hover:border-primary/40 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-muted p-2 rounded-lg text-muted-foreground">
-                            <FileText className="h-5 w-5" />
+                  {documentsLoading ? (
+                    <div className="py-12 flex justify-center">
+                      <div className="h-8 w-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  ) : documents.length === 0 ? (
+                    <div className="py-12 flex flex-col items-center text-center">
+                      <FileText className="h-10 w-10 text-muted-foreground/30 mb-2" />
+                      <p className="text-xs font-bold text-muted-foreground">No documents uploaded</p>
+                      <p className="text-[10px] text-muted-foreground/60 mt-1">Uploaded files will appear here for review</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {documents.map((d: any) => (
+                        <div key={d.id} className="flex justify-between items-center border border-border/60 p-3 rounded-xl hover:border-primary/40 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-muted p-2 rounded-lg text-muted-foreground">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-foreground">{d.fileName}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {d.client?.firstName} {d.client?.lastName} • {d.documentType}
+                                {d.verificationNotes && <span className="ml-2 text-yellow-500">{d.verificationNotes}</span>}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs font-bold text-foreground">{d.file}</p>
-                            <p className="text-[10px] text-muted-foreground">{d.client} • {d.size}</p>
-                          </div>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                            d.status === "VERIFIED" ? "bg-green-500/10 text-green-600" :
+                            d.status === "REJECTED" ? "bg-red-500/10 text-red-500" :
+                            "bg-yellow-500/10 text-yellow-600"
+                          }`}>
+                            {d.status}
+                          </span>
                         </div>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                          d.status === "VERIFIED" ? "bg-green-500/10 text-green-600" :
-                          d.status === "PENDING" ? "bg-yellow-500/10 text-yellow-600" : "bg-red-500/10 text-red-500"
-                        }`}>
-                          {d.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
