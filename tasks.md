@@ -92,12 +92,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| [ ] Define workflow stage constants and transition rules | Developer 1 | `feature/workflow-rules` | Application model |
-| [ ] Add workflow stage history model | Developer 1 | `feature/stage-history` | Workflow rules |
-| [ ] Build application detail page with current stage | Developer 2 | `feature/application-detail` | Application create, workflow rules |
-| [ ] Build admin pipeline board by stage | Developer 2 | `feature/workflow-pipeline` | Application detail, stage history |
-| [ ] Add stage movement actions and activity logging | Developer 1 | `feature/stage-transitions` | Stage history, pipeline |
-| [ ] Add approved/refused decision branching | Developer 2 | `feature/decision-branching` | Stage transitions |
+| [x] Define workflow stage constants and transition rules | Developer 1 | `feature/workflow-rules` | Application model |
+| [x] Add workflow stage history model | Developer 1 | `feature/stage-history` | Workflow rules |
+| [x] Build application detail page with current stage | Developer 2 | `feature/application-detail` | Application create, workflow rules |
+| [x] Build admin pipeline board by stage | Developer 2 | `feature/workflow-pipeline` | Application detail, stage history |
+| [x] Add stage movement actions and activity logging | Developer 1 | `feature/stage-transitions` | Stage history, pipeline |
+| [x] Add approved/refused decision branching | Developer 2 | `feature/decision-branching` | Stage transitions |
 
 Merge order:
 
