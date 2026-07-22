@@ -237,6 +237,16 @@ export default function Home() {
   const [addTemplateError, setAddTemplateError] = useState<string | null>(null);
   const [addTemplateLoading, setAddTemplateLoading] = useState(false);
 
+  // Document Upload State
+  const [isAddDocumentOpen, setIsAddDocumentOpen] = useState(false);
+  const [newDocClientId, setNewDocClientId] = useState("");
+  const [newDocApplicationId, setNewDocApplicationId] = useState("");
+  const [newDocType, setNewDocType] = useState("");
+  const [newDocFileName, setNewDocFileName] = useState("");
+  const [addDocError, setAddDocError] = useState<string | null>(null);
+  const [addDocSuccess, setAddDocSuccess] = useState<string | null>(null);
+  const [addDocLoading, setAddDocLoading] = useState(false);
+
   // Sync profile fields when user is loaded
   useEffect(() => {
     if (user) {
@@ -391,6 +401,7 @@ export default function Home() {
   useEffect(() => {
     if (currentTab === "documents") {
       fetchDocuments();
+      if (clients.length === 0) fetchClients();
     }
   }, [currentTab]);
 
@@ -863,6 +874,44 @@ export default function Home() {
       setAddTemplateError("Connection error. Please try again.");
     } finally {
       setAddTemplateLoading(false);
+    }
+  };
+
+  const handleAddDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddDocLoading(true);
+    setAddDocError(null);
+    setAddDocSuccess(null);
+
+    try {
+      const res = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: newDocClientId ? Number(newDocClientId) : undefined,
+          applicationId: newDocApplicationId ? Number(newDocApplicationId) : undefined,
+          documentType: newDocType,
+          fileName: newDocFileName,
+          fileUrl: null,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setAddDocError(data.error || "Failed to add document");
+      } else {
+        setAddDocSuccess("Document recorded successfully!");
+        setNewDocClientId("");
+        setNewDocApplicationId("");
+        setNewDocType("");
+        setNewDocFileName("");
+        fetchDocuments();
+      }
+    } catch (err) {
+      setAddDocError("Connection error. Please try again.");
+    } finally {
+      setAddDocLoading(false);
     }
   };
 
@@ -2695,18 +2744,113 @@ export default function Home() {
                   <h3 className="text-lg font-bold text-foreground">Document Management</h3>
                   <p className="text-xs text-muted-foreground">Manage checklists and inspect uploaded client files.</p>
                 </div>
-                {user?.role === "ADMIN" && (
-                <button
-                  onClick={() => {
-                    setIsAddTemplateOpen(true);
-                    setAddTemplateError(null);
-                  }}
-                  className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer"
-                >
-                  <Plus className="h-4 w-4" /> Add Template
-                </button>
-                )}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setIsAddDocumentOpen(true);
+                      setAddDocError(null);
+                      setAddDocSuccess(null);
+                    }}
+                    className="bg-card border border-border text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 text-foreground hover:bg-secondary transition-all cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" /> Upload File
+                  </button>
+                  {user?.role === "ADMIN" && (
+                  <button
+                    onClick={() => {
+                      setIsAddTemplateOpen(true);
+                      setAddTemplateError(null);
+                    }}
+                    className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" /> Add Template
+                  </button>
+                  )}
+                </div>
               </div>
+
+              {/* Upload Document Modal */}
+              {isAddDocumentOpen && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                  <div className="bg-card border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
+                      <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-primary" /> Upload Document
+                      </h4>
+                      <button
+                        onClick={() => setIsAddDocumentOpen(false)}
+                        className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <form onSubmit={handleAddDocument} className="p-6 space-y-4">
+                      {addDocError && (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+                          {addDocError}
+                        </div>
+                      )}
+                      {addDocSuccess && (
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-xs font-semibold text-green-600">
+                          {addDocSuccess}
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Document Type *</label>
+                        <select
+                          required
+                          value={newDocType}
+                          onChange={(e) => setNewDocType(e.target.value)}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        >
+                          <option value="">Select document type...</option>
+                          {documentTemplates.map((tpl: any) => (
+                            <option key={tpl.id} value={tpl.name}>{tpl.name}</option>
+                          ))}
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Client</label>
+                        <select
+                          value={newDocClientId}
+                          onChange={(e) => setNewDocClientId(e.target.value)}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        >
+                          <option value="">No client (unlinked)</option>
+                          {clients.map((c: any) => (
+                            <option key={c.id} value={c.id}>
+                              {c.firstName} {c.lastName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">File Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newDocFileName}
+                          onChange={(e) => setNewDocFileName(e.target.value)}
+                          placeholder="e.g. passport_scan.pdf"
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={addDocLoading}
+                        className="w-full bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center justify-center gap-2 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {addDocLoading ? (
+                          <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                        ) : (
+                          <>Record Document</>
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
 
               {/* Add Template Modal */}
               {isAddTemplateOpen && (
