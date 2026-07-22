@@ -169,6 +169,14 @@ export async function PATCH(request: Request) {
       },
     });
 
+    // Cascade staff assignment to all applications of this client
+    if (assignedStaffId !== undefined) {
+      await prisma.application.updateMany({
+        where: { clientId: Number(id) },
+        data: { assignedStaffId: assignedStaffId || null },
+      });
+    }
+
     return NextResponse.json({ client: updatedClient });
   } catch (error: any) {
     console.error("Update client error:", error);

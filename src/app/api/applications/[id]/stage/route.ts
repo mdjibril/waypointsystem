@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
-import { isValidTransition, stageForDecision, DecisionOutcome } from "@/lib/workflow";
+import { isValidTransition, stageForDecision, DecisionOutcome, TERMINAL_STAGES } from "@/lib/workflow";
 import { WorkflowStage } from "@/types";
 
 // GET /api/applications/[id]/stage - Stage history for an application
@@ -125,11 +125,18 @@ export async function POST(
       }
     }
 
+    const newStatus = TERMINAL_STAGES.includes(toStage as WorkflowStage)
+      ? "COMPLETED"
+      : toStage === "CLIENT_INQUIRY"
+        ? "NOT_STARTED"
+        : "IN_PROGRESS";
+
     const [updatedApplication, historyEntry] = await prisma.$transaction([
       prisma.application.update({
         where: { id: Number(id) },
         data: {
           currentStage: toStage,
+          status: newStatus,
           ...(decisionStatus !== undefined ? { decisionStatus: decisionStatus || null } : {}),
         },
         include: {

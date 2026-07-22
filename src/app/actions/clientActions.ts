@@ -118,6 +118,14 @@ export async function updateClientAction(
       },
     });
 
+    // Cascade staff assignment to all applications of this client
+    if (data.assignedStaffId !== undefined) {
+      await prisma.application.updateMany({
+        where: { clientId: id },
+        data: { assignedStaffId: data.assignedStaffId || null },
+      });
+    }
+
     revalidatePath("/");
     return { client: updatedClient };
   } catch (err: any) {

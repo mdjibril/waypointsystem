@@ -166,6 +166,18 @@ export default function Home() {
   // Client Profile State
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [clientProfileLoading, setClientProfileLoading] = useState(false);
+  const [isEditingClient, setIsEditingClient] = useState(false);
+  const [editClientFirstName, setEditClientFirstName] = useState("");
+  const [editClientLastName, setEditClientLastName] = useState("");
+  const [editClientEmail, setEditClientEmail] = useState("");
+  const [editClientPhone, setEditClientPhone] = useState("");
+  const [editClientAddress, setEditClientAddress] = useState("");
+  const [editClientPassport, setEditClientPassport] = useState("");
+  const [editClientDob, setEditClientDob] = useState("");
+  const [editClientSource, setEditClientSource] = useState("");
+  const [editClientAssignedStaffId, setEditClientAssignedStaffId] = useState("");
+  const [editClientError, setEditClientError] = useState<string | null>(null);
+  const [editClientLoading, setEditClientLoading] = useState(false);
 
   // Application State
   const [applications, setApplications] = useState<any[]>([]);
@@ -635,6 +647,45 @@ export default function Home() {
       setAddClientError("Connection error. Please try again.");
     } finally {
       setAddClientLoading(false);
+    }
+  };
+
+  const handleUpdateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditClientLoading(true);
+    setEditClientError(null);
+
+    try {
+      const res = await fetch("/api/clients", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedClient.id,
+          firstName: editClientFirstName,
+          lastName: editClientLastName,
+          email: editClientEmail,
+          phone: editClientPhone,
+          address: editClientAddress || undefined,
+          passportNumber: editClientPassport || undefined,
+          dateOfBirth: editClientDob || undefined,
+          source: editClientSource,
+          assignedStaffId: editClientAssignedStaffId ? Number(editClientAssignedStaffId) : undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setEditClientError(data.error || "Failed to update client");
+      } else {
+        setSelectedClient(data.client);
+        setIsEditingClient(false);
+        fetchClients();
+      }
+    } catch (err) {
+      setEditClientError("Connection error. Please try again.");
+    } finally {
+      setEditClientLoading(false);
     }
   };
 
@@ -1263,12 +1314,178 @@ export default function Home() {
                     </div>
                   </div>
                   {user?.role === "ADMIN" && (
-                  <button className="bg-card border border-border text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-foreground hover:bg-secondary transition-all cursor-pointer">
+                  <button
+                    onClick={() => {
+                      setEditClientFirstName(selectedClient.firstName || "");
+                      setEditClientLastName(selectedClient.lastName || "");
+                      setEditClientEmail(selectedClient.email || "");
+                      setEditClientPhone(selectedClient.phone || "");
+                      setEditClientAddress(selectedClient.address || "");
+                      setEditClientPassport(selectedClient.passportNumber || "");
+                      setEditClientDob(selectedClient.dateOfBirth ? new Date(selectedClient.dateOfBirth).toISOString().split("T")[0] : "");
+                      setEditClientSource(selectedClient.source || "");
+                      setEditClientAssignedStaffId(selectedClient.assignedStaffId ? String(selectedClient.assignedStaffId) : "");
+                      setEditClientError(null);
+                      setIsEditingClient(true);
+                    }}
+                    className="bg-card border border-border text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-foreground hover:bg-secondary transition-all cursor-pointer"
+                  >
                     <Edit className="h-3.5 w-3.5" /> Edit Profile
                   </button>
                   )}
                 </div>
               </div>
+
+              {/* Edit Client Modal */}
+              {isEditingClient && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                  <div className="bg-card border border-border w-full max-w-lg rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
+                      <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                        <Edit className="h-4 w-4 text-primary" /> Edit Client Profile
+                      </h4>
+                      <button
+                        onClick={() => setIsEditingClient(false)}
+                        className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleUpdateClient} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                      {editClientError && (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+                          {editClientError}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">First Name *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editClientFirstName}
+                            onChange={(e) => setEditClientFirstName(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Last Name *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editClientLastName}
+                            onChange={(e) => setEditClientLastName(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Email *</label>
+                          <input
+                            type="email"
+                            required
+                            value={editClientEmail}
+                            onChange={(e) => setEditClientEmail(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Phone *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editClientPhone}
+                            onChange={(e) => setEditClientPhone(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Address</label>
+                        <input
+                          type="text"
+                          value={editClientAddress}
+                          onChange={(e) => setEditClientAddress(e.target.value)}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Passport Number</label>
+                          <input
+                            type="text"
+                            value={editClientPassport}
+                            onChange={(e) => setEditClientPassport(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Date of Birth</label>
+                          <input
+                            type="date"
+                            value={editClientDob}
+                            onChange={(e) => setEditClientDob(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Source *</label>
+                          <select
+                            value={editClientSource}
+                            onChange={(e) => setEditClientSource(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            <option value="walk-in">Walk-in</option>
+                            <option value="phone">Phone</option>
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="referral">Referral</option>
+                            <option value="website">Website</option>
+                            <option value="social-media">Social Media</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Assign Staff</label>
+                          <select
+                            value={editClientAssignedStaffId}
+                            onChange={(e) => setEditClientAssignedStaffId(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            <option value="">Unassigned</option>
+                            {staffUsers.map((s: any) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          disabled={editClientLoading}
+                          className="w-full bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center justify-center gap-2 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {editClientLoading ? (
+                            <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                          ) : (
+                            <>Save Changes</>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
 
               {/* Profile Details Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
