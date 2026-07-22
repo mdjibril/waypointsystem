@@ -22,6 +22,8 @@ model User {
   stageChangesMade ApplicationStageHistory[] @relation("StageHistoryChangedBy")
   assignedTasks   Task[]        @relation("TaskAssignee")
   createdTasks    Task[]        @relation("TaskAssignedBy")
+  uploadedDocuments Document[]   @relation("DocumentUploader")
+  verifiedDocuments Document[]   @relation("DocumentVerifier")
 
   @@map("users")
 }
@@ -52,15 +54,37 @@ model ServiceType {
 }
 
 model DocumentTemplate {
-  id          Int      @id @default(autoincrement())
-  name        String
-  serviceType String?
-  isRequired  Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 Int      @id @default(autoincrement())
+  name               String
+  serviceType        String?
+  destinationCountry String?
+  isRequired         Boolean  @default(true)
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@map("document_templates")
+}
+
+model Document {
+  id               Int       @id @default(autoincrement())
+  clientId         Int?
+  client           Client?   @relation(fields: [clientId], references: [id])
+  applicationId    Int?
+  application      Application? @relation(fields: [applicationId], references: [id])
+  documentType     String
+  fileName         String
+  fileUrl          String?
+  status           String    @default("PENDING")
+  verificationNotes String?
+  uploadedById     Int
+  uploadedBy       User      @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  verifiedById     Int?
+  verifiedBy       User?     @relation("DocumentVerifier", fields: [verifiedById], references: [id])
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("documents")
 }
 
 model Client {
@@ -80,6 +104,7 @@ model Client {
   assignedStaff   User?         @relation("ClientAssignedStaff", fields: [assignedStaffId], references: [id])
   applications    Application[]
   tasks           Task[]
+  documents       Document[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -101,6 +126,7 @@ model Application {
   assignedStaff      User?    @relation("ApplicationAssignedStaff", fields: [assignedStaffId], references: [id])
   stageHistory       ApplicationStageHistory[]
   tasks              Task[]
+  documents          Document[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
