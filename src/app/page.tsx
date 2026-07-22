@@ -29,8 +29,85 @@ import {
   MapPin,
   Calendar,
   Globe,
-  Edit
+  Edit,
+  Workflow,
+  History,
+  GripVertical
 } from "lucide-react";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { STAGE_ORDER, STAGE_LABELS, getAllowedNextStages } from "@/lib/workflow";
+
+function PipelineCard({ app, draggable, onOpen }: { app: any; draggable: boolean; onOpen: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `app-${app.id}`,
+    data: { app },
+    disabled: !draggable,
+  });
+
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+    : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`bg-card border border-border rounded-xl p-3 shadow-sm text-xs transition-colors ${
+        isDragging ? "opacity-40" : "hover:border-primary/50"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <button onClick={onOpen} className="text-left font-bold text-foreground hover:text-primary hover:underline cursor-pointer">
+          {app.client?.firstName} {app.client?.lastName}
+        </button>
+        {draggable && (
+          <span {...attributes} {...listeners} className="cursor-grab text-muted-foreground hover:text-foreground touch-none">
+            <GripVertical className="h-3.5 w-3.5" />
+          </span>
+        )}
+      </div>
+      <p className="text-[10px] text-muted-foreground mt-1">{app.serviceType}</p>
+      <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{app.client?.fileNumber}</p>
+      {app.assignedStaff?.name && (
+        <p className="text-[10px] text-muted-foreground mt-1">{app.assignedStaff.name}</p>
+      )}
+    </div>
+  );
+}
+
+function PipelineColumn({ stage, apps, dropState, children }: { stage: string; apps: any[]; dropState: "neutral" | "valid" | "invalid"; children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id: stage });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`bg-muted/10 border rounded-2xl p-3 flex flex-col min-w-64 w-64 flex-shrink-0 min-h-96 transition-colors ${
+        dropState === "valid" ? "border-primary bg-primary/5" : dropState === "invalid" ? "border-destructive/50 bg-destructive/5" : "border-border"
+      }`}
+    >
+      <div className="flex justify-between items-center mb-3 pb-2 border-b border-border">
+        <span className="font-bold text-[11px] text-foreground uppercase tracking-wide">{STAGE_LABELS[stage as keyof typeof STAGE_LABELS]}</span>
+        <span className="text-[10px] font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{apps.length}</span>
+      </div>
+      <div className="space-y-2 flex-1 overflow-y-auto">
+        {apps.length === 0 ? (
+          <p className="text-[10px] text-muted-foreground text-center py-6">No applications</p>
+        ) : (
+          children
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const { user, login, logout, isAuthenticated, loginError } = useAuth();
@@ -103,6 +180,18 @@ export default function Home() {
   const [addAppError, setAddAppError] = useState<string | null>(null);
   const [addAppSuccess, setAddAppSuccess] = useState<string | null>(null);
   const [addAppLoading, setAddAppLoading] = useState(false);
+
+  // Application Detail State
+  const [selectedApplication, setSelectedApplication] = useState<any>(null);
+  const [applicationDetailLoading, setApplicationDetailLoading] = useState(false);
+  const [stageHistory, setStageHistory] = useState<any[]>([]);
+  const [stageHistoryLoading, setStageHistoryLoading] = useState(false);
+  const [stageActionLoading, setStageActionLoading] = useState(false);
+  const [stageActionError, setStageActionError] = useState<string | null>(null);
+
+  // Pipeline Board State
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
+  const [activeDragApp, setActiveDragApp] = useState<any>(null);
 
   // Sync profile fields when user is loaded
   useEffect(() => {
@@ -191,11 +280,117 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (currentTab === "applications") {
+    if (currentTab === "applications" || currentTab === "pipeline") {
       fetchApplications();
       if (clients.length === 0) fetchClients();
     }
   }, [currentTab]);
+
+  // Fetch a single application for the detail view
+  const viewApplication = async (applicationId: number) => {
+    setApplicationDetailLoading(true);
+    setStageActionError(null);
+    try {
+      const res = await fetch(`/api/applications/${applicationId}`);
+      const data = await res.json();
+      if (res.ok) {
+        setSelectedApplication(data.application);
+        fetchStageHistory(applicationId);
+      }
+    } catch (err) {
+      console.error("Failed to load application:", err);
+    } finally {
+      setApplicationDetailLoading(false);
+    }
+  };
+
+  const fetchStageHistory = async (applicationId: number) => {
+    setStageHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/applications/${applicationId}/stage`);
+      const data = await res.json();
+      if (res.ok) setStageHistory(data.history);
+    } catch (err) {
+      console.error("Failed to load stage history:", err);
+    } finally {
+      setStageHistoryLoading(false);
+    }
+  };
+
+  // Move an application to a new stage (used by both the detail page buttons and the pipeline board drag/drop)
+  const moveApplicationStage = async (applicationId: number, toStage: string, decisionStatus?: string | null) => {
+    setStageActionLoading(true);
+    setStageActionError(null);
+    setPipelineError(null);
+    try {
+      const res = await fetch(`/api/applications/${applicationId}/stage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toStage, decisionStatus }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setStageActionError(data.error || "Failed to move application");
+        setPipelineError(data.error || "Failed to move application");
+        return false;
+      }
+
+      setApplications((prev) => prev.map((a) => (a.id === applicationId ? data.application : a)));
+      if (selectedApplication?.id === applicationId) {
+        setSelectedApplication(data.application);
+        setStageHistory((prev) => [...prev, data.history]);
+      }
+      return true;
+    } catch (err) {
+      console.error("Failed to move application stage:", err);
+      setStageActionError("Failed to move application");
+      setPipelineError("Failed to move application");
+      return false;
+    } finally {
+      setStageActionLoading(false);
+    }
+  };
+
+  const canTransitionApplication = (app: any) => {
+    if (!user) return false;
+    if (user.role.toUpperCase() === "ADMIN") return true;
+    return app.client?.assignedStaffId === user.id;
+  };
+
+  // Pipeline board drag-and-drop
+  const pipelineSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handlePipelineDragStart = (event: DragStartEvent) => {
+    setActiveDragApp(event.active.data.current?.app || null);
+  };
+
+  const handlePipelineDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragApp(null);
+    if (!over) return;
+
+    const app = active.data.current?.app;
+    const toStage = String(over.id);
+    if (!app || app.currentStage === toStage) return;
+
+    if (!(getAllowedNextStages(app.currentStage) as string[]).includes(toStage)) {
+      setPipelineError(`Cannot move from ${STAGE_LABELS[app.currentStage as keyof typeof STAGE_LABELS]} to ${STAGE_LABELS[toStage as keyof typeof STAGE_LABELS]}`);
+      return;
+    }
+
+    // Reverting from a terminal path back to Decision clears the stale decision outcome
+    const decisionStatus = toStage === "DECISION" && app.currentStage !== "DECISION" ? null : undefined;
+
+    // Move the card instantly; only snap it back if the server rejects the move
+    const previousStage = app.currentStage;
+    setApplications((prev) => prev.map((a) => (a.id === app.id ? { ...a, currentStage: toStage } : a)));
+
+    const success = await moveApplicationStage(app.id, toStage, decisionStatus);
+    if (!success) {
+      setApplications((prev) => prev.map((a) => (a.id === app.id ? { ...a, currentStage: previousStage } : a)));
+    }
+  };
 
   const handleCreateApplication = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1171,7 +1366,7 @@ export default function Home() {
             </div>
           ) : null}
 
-          {currentTab === "applications" && (
+          {currentTab === "applications" && !selectedApplication && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="flex justify-between items-center flex-wrap gap-4">
                 <div>
@@ -1381,7 +1576,7 @@ export default function Home() {
                             </span>
                           </td>
                           <td className="py-3.5 px-6 text-right">
-                            <button className="text-primary hover:underline font-semibold text-xs cursor-pointer">View</button>
+                            <button onClick={() => viewApplication(app.id)} className="text-primary hover:underline font-semibold text-xs cursor-pointer">View</button>
                           </td>
                         </tr>
                       ))}
@@ -1389,6 +1584,235 @@ export default function Home() {
                   </table>
                 )}
               </div>
+            </div>
+          )}
+
+          {currentTab === "applications" && selectedApplication && applicationDetailLoading ? (
+            <div className="py-20 flex justify-center items-center">
+              <div className="h-10 w-10 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : currentTab === "applications" && selectedApplication ? (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Back Button */}
+              <button
+                onClick={() => { setSelectedApplication(null); setStageHistory([]); setStageActionError(null); }}
+                className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="h-4 w-4" /> Back to Applications
+              </button>
+
+              {/* Header */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <div className="flex items-start justify-between flex-wrap gap-4">
+                  <div>
+                    <h3 className="text-xl font-extrabold text-foreground">
+                      {selectedApplication.client?.firstName} {selectedApplication.client?.lastName}
+                    </h3>
+                    <p className="text-sm font-mono text-primary font-bold mt-0.5">{selectedApplication.client?.fileNumber}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{selectedApplication.serviceType} · {selectedApplication.destinationCountry}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
+                      {STAGE_LABELS[selectedApplication.currentStage as keyof typeof STAGE_LABELS] || selectedApplication.currentStage.replace(/_/g, " ")}
+                    </span>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      selectedApplication.status === "COMPLETED" ? "bg-green-500/10 text-green-600" :
+                      selectedApplication.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
+                      selectedApplication.status === "BLOCKED" ? "bg-red-500/10 text-red-600" :
+                      "bg-muted text-muted-foreground"
+                    }`}>
+                      {selectedApplication.status.replace(/_/g, " ")}
+                    </span>
+                    {selectedApplication.decisionStatus && (
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        selectedApplication.decisionStatus === "APPROVED" ? "bg-green-500/10 text-green-600" :
+                        selectedApplication.decisionStatus === "REFUSED" ? "bg-red-500/10 text-red-600" :
+                        "bg-muted text-muted-foreground"
+                      }`}>
+                        {selectedApplication.decisionStatus.replace(/_/g, " ")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {stageActionError && (
+                <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+                  {stageActionError}
+                </div>
+              )}
+
+              {/* Application Details Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-primary" /> Application Details
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Travel Purpose</p>
+                        <p className="text-xs font-semibold text-foreground">{selectedApplication.travelPurpose}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Expected Travel Date</p>
+                        <p className="text-xs font-semibold text-foreground">
+                          {selectedApplication.expectedTravelDate
+                            ? new Date(selectedApplication.expectedTravelDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Assigned Staff</p>
+                        <p className="text-xs font-semibold text-foreground">{selectedApplication.assignedStaff?.name || "Unassigned"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stage Movement / Decision Actions */}
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                    <Workflow className="h-4 w-4 text-primary" /> Move Stage
+                  </h4>
+                  {!canTransitionApplication(selectedApplication) ? (
+                    <p className="text-xs text-muted-foreground">You do not have permission to move this application.</p>
+                  ) : selectedApplication.currentStage === "DECISION" ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        disabled={stageActionLoading}
+                        onClick={() => moveApplicationStage(selectedApplication.id, "VISA_APPROVED_PATH", "APPROVED")}
+                        className="bg-green-500/10 text-green-600 text-xs font-bold px-3 py-2.5 rounded-xl hover:bg-green-500/20 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        disabled={stageActionLoading}
+                        onClick={() => moveApplicationStage(selectedApplication.id, "VISA_REFUSED_PATH", "REFUSED")}
+                        className="bg-red-500/10 text-red-600 text-xs font-bold px-3 py-2.5 rounded-xl hover:bg-red-500/20 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        Refuse
+                      </button>
+                      <button
+                        disabled={stageActionLoading}
+                        onClick={() => moveApplicationStage(selectedApplication.id, "DECISION", "WITHDRAWN")}
+                        className="bg-muted text-muted-foreground text-xs font-bold px-3 py-2.5 rounded-xl hover:bg-secondary transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        Mark Withdrawn
+                      </button>
+                      <button
+                        disabled={stageActionLoading}
+                        onClick={() => moveApplicationStage(selectedApplication.id, "DECISION", "PENDING_ACTION")}
+                        className="bg-blue-500/10 text-blue-600 text-xs font-bold px-3 py-2.5 rounded-xl hover:bg-blue-500/20 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        Pending Action
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {getAllowedNextStages(selectedApplication.currentStage).map((stage) => (
+                        <button
+                          key={stage}
+                          disabled={stageActionLoading}
+                          onClick={() => moveApplicationStage(selectedApplication.id, stage)}
+                          className="bg-primary text-primary-foreground text-xs font-bold px-3 py-2.5 rounded-xl shadow-md shadow-primary/10 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          Move to {STAGE_LABELS[stage as keyof typeof STAGE_LABELS]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Stage History Timeline */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <History className="h-4 w-4 text-primary" /> Stage History
+                </h4>
+                {stageHistoryLoading ? (
+                  <div className="py-8 flex justify-center items-center">
+                    <div className="h-6 w-6 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : stageHistory.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No stage changes recorded yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {stageHistory.map((h: any) => (
+                      <div key={h.id} className="flex items-start gap-3 p-3 bg-muted/20 rounded-xl">
+                        <div className="h-2 w-2 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">
+                            {h.fromStage ? `${STAGE_LABELS[h.fromStage as keyof typeof STAGE_LABELS] || h.fromStage} → ` : ""}
+                            {STAGE_LABELS[h.toStage as keyof typeof STAGE_LABELS] || h.toStage}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {h.changedBy?.name || "Unknown"} · {new Date(h.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {currentTab === "pipeline" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Pipeline Board</h3>
+                <p className="text-xs text-muted-foreground">Drag a card into a column to move it to that stage, or click a card to open its detail page.</p>
+              </div>
+
+              {pipelineError && (
+                <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive flex items-center justify-between gap-4">
+                  <span>{pipelineError}</span>
+                  <button onClick={() => setPipelineError(null)} className="font-bold cursor-pointer">✕</button>
+                </div>
+              )}
+
+              {applicationsLoading ? (
+                <div className="py-20 flex justify-center items-center">
+                  <div className="h-10 w-10 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : (
+                <DndContext sensors={pipelineSensors} onDragStart={handlePipelineDragStart} onDragEnd={handlePipelineDragEnd}>
+                  <div className="flex gap-4 overflow-x-auto pb-4">
+                    {STAGE_ORDER.map((stage) => {
+                      const stageApps = applications.filter((a: any) => a.currentStage === stage);
+                      const allowedForActive = activeDragApp ? getAllowedNextStages(activeDragApp.currentStage) : [];
+                      const dropState: "neutral" | "valid" | "invalid" = !activeDragApp
+                        ? "neutral"
+                        : allowedForActive.includes(stage)
+                        ? "valid"
+                        : "invalid";
+                      return (
+                        <PipelineColumn key={stage} stage={stage} apps={stageApps} dropState={dropState}>
+                          {stageApps.map((app: any) => (
+                            <PipelineCard
+                              key={app.id}
+                              app={app}
+                              draggable={canTransitionApplication(app) && app.currentStage !== "DECISION"}
+                              onOpen={() => { setCurrentTab("applications"); viewApplication(app.id); }}
+                            />
+                          ))}
+                        </PipelineColumn>
+                      );
+                    })}
+                  </div>
+                  <DragOverlay>
+                    {activeDragApp ? <PipelineCard app={activeDragApp} draggable={false} onOpen={() => {}} /> : null}
+                  </DragOverlay>
+                </DndContext>
+              )}
             </div>
           )}
 

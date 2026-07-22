@@ -19,6 +19,7 @@ model User {
   clientsCreated  Client[]      @relation("ClientCreatedBy")
   clientsAssigned Client[]      @relation("ClientAssignedStaff")
   applications    Application[] @relation("ApplicationAssignedStaff")
+  stageChangesMade ApplicationStageHistory[] @relation("StageHistoryChangedBy")
 
   @@map("users")
 }
@@ -95,8 +96,23 @@ model Application {
   decisionStatus     String?
   assignedStaffId    Int?
   assignedStaff      User?    @relation("ApplicationAssignedStaff", fields: [assignedStaffId], references: [id])
+  stageHistory       ApplicationStageHistory[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@map("applications")
+}
+
+model ApplicationStageHistory {
+  id            Int         @id @default(autoincrement())
+  applicationId Int
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStage     String?
+  toStage       String
+  changedById   Int
+  changedBy     User        @relation("StageHistoryChangedBy", fields: [changedById], references: [id])
+  note          String?
+  createdAt     DateTime    @default(now())
+
+  @@map("application_stage_history")
 }

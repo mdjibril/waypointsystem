@@ -1488,3 +1488,250 @@ curl -s http://localhost:3000/api/staff | jq '.users | length'
     npm run build
     ```
     Expected: "✓ Compiled successfully" with no errors.
+
+---
+
+# Phase 4 — Test Plan: Workflow Pipeline
+
+## Setup Commands
+
+```bash
+# Regenerate the Prisma client and apply the stage-history migration
+npx prisma generate
+npx prisma migrate dev
+
+# Start the dev server
+npm run dev
+
+# Log in as admin, assign an existing client to staff (id=2), and create an application for it
+curl -s -c admin.jar -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@waypoint.com", "password": "password123"}' | jq
+
+curl -s -b admin.jar -X PATCH http://localhost:3000/api/clients \
+  -H "Content-Type: application/json" \
+  -d '{"id": <CLIENT_ID>, "assignedStaffId": 2}' | jq
+
+curl -s -b admin.jar -X POST http://localhost:3000/api/applications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": <CLIENT_ID>,
+    "serviceType": "UK Tourist Visa",
+    "destinationCountry": "United Kingdom",
+    "travelPurpose": "Tourism",
+    "assignedStaffId": 2
+  }' | jq
+
+# Also log in as staff for the scoped tests below
+curl -s -c staff.jar -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "staff@waypoint.com", "password": "password123"}' | jq
+```
+
+---
+
+## Task 1 — Workflow Stage Constants and Transition Rules
+
+### Test Steps
+
+1. **Stage order and labels are centralized:**
+
+   - `src/lib/workflow.ts` exports `STAGE_ORDER` (the 12 stages, same order as the `WorkflowStage` seed rows) and `STAGE_LABELS` (human-readable titles).
+   - Expected: Every place in the UI that shows a stage (applications table, application detail header, pipeline board columns) renders via `STAGE_LABELS`, not the raw enum string.
+
+2. **Illegal transition rejected (skipping stages):**
+
+   ```bash
+   curl -s -w "\nHTTP_STATUS:%{http_code}\n" -b admin.jar -X POST http://localhost:3000/api/applications/<APP_ID>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "DECISION"}'
+   ```
+   Expected: `400` with `{ error: "Cannot move from CLIENT_INQUIRY to DECISION" }` (or whatever the application's actual current stage is) — a fresh application cannot jump straight to `DECISION`.
+
+3. **Legal one-step-forward transition accepted:**
+
+   ```bash
+   curl -s -w "\nHTTP_STATUS:%{http_code}\n" -b admin.jar -X POST http://localhost:3000/api/applications/<APP_ID>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "CUSTOMER_SERVICE_REGISTRATION"}'
+   ```
+   Expected: `200` with the updated `application.currentStage`.
+
+4. **`DECISION` branches to both terminal paths, plus one step back:**
+
+   - Drive the application (repeating step 3 with each next stage) up to `DECISION`.
+   - Expected: `getAllowedNextStages("DECISION")` (and therefore the detail page's Move Stage buttons) offers `VISA_APPROVED_PATH`, `VISA_REFUSED_PATH`, and `APPLICATION_TRACKING` (step back) — never a skip to some other unrelated stage.
+
+## Task 2 — Workflow Stage History Model
+
+### Test Steps
+
+1. **History row created on every transition:**
+
+   ```bash
+   curl -s -b admin.jar http://localhost:3000/api/applications/<APP_ID>/stage | jq
+   ```
+   Expected: `200` with `{ history: [...] }` — one entry per transition made so far, each with `fromStage`, `toStage`, `changedBy.name`, and `createdAt`, ordered oldest first.
+
+2. **History survives an application delete via cascade (schema check):**
+
+   - `prisma/schema.prisma`: `ApplicationStageHistory.application` uses `onDelete: Cascade` — deleting an `Application` also removes its history rows, no orphaned foreign keys left behind.
+
+## Task 3 — Application Detail Page with Current Stage
+
+### Test Steps
+
+1. **"View" opens the detail page:**
+
+   - Log in as admin in the browser, navigate to Applications, click "View" on any row.
+   - Expected: The list is replaced by the detail page — client name/file number, service type, destination, travel purpose, expected travel date, assigned staff, and the current stage/status/decision badges.
+
+2. **Back button returns to the list:**
+
+   - Click "Back to Applications".
+   - Expected: The applications table reappears (list state, not detail).
+
+3. **Stage history renders on the detail page:**
+
+   - Expected: The "Stage History" card lists every transition recorded for this application (see Task 2), most recent last.
+
+## Task 4 — Admin Pipeline Board by Stage
+
+### Test Steps
+
+1. **Pipeline nav item visible to both roles:**
+
+   - Log in as admin, then as staff — in both cases the "Pipeline" item appears in the sidebar.
+
+2. **Board renders one column per stage:**
+
+   - Open the Pipeline tab.
+   - Expected: 12 horizontally-scrollable columns, one per `STAGE_ORDER` entry, each showing its applications as cards with client name, service type, file number, and assigned staff.
+
+3. **Staff sees only their assigned applications on the board:**
+
+   - Log in as staff, open Pipeline.
+   - Expected: Only applications whose client is assigned to this staff member appear in any column; unassigned/other-staff applications are absent (same scoping as the Applications list).
+
+4. **Clicking a card opens its detail page:**
+
+   - Click a card's client name (not the drag handle).
+   - Expected: Navigates to the Applications tab with that application's detail page open (Task 3's view).
+
+## Task 5 — Stage Movement Actions and Activity Logging
+
+#### Part A — Backend API Permission Enforcement
+
+1. **Admin can move any application:**
+
+   ```bash
+   curl -s -w "\nHTTP_STATUS:%{http_code}\n" -b admin.jar -X POST http://localhost:3000/api/applications/<ANY_APP_ID>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "INITIAL_CONSULTATION"}'
+   ```
+   Expected: `200`.
+
+2. **Assigned staff can move their own application:**
+
+   ```bash
+   curl -s -w "\nHTTP_STATUS:%{http_code}\n" -b staff.jar -X POST http://localhost:3000/api/applications/<ASSIGNED_APP_ID>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "INITIAL_CONSULTATION"}'
+   ```
+   Expected: `200`.
+
+3. **Staff is rejected on an application not assigned to them:**
+
+   ```bash
+   curl -s -w "\nHTTP_STATUS:%{http_code}\n" -b staff.jar -X POST http://localhost:3000/api/applications/<OTHER_APP_ID>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "INITIAL_CONSULTATION"}'
+   ```
+   Expected: `403` with `{ error: "You do not have permission to move this application" }`.
+
+4. **Unauthenticated request rejected:**
+
+   ```bash
+   curl -s -w "\nHTTP_STATUS:%{http_code}\n" -X POST http://localhost:3000/api/applications/<APP_ID>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "INITIAL_CONSULTATION"}'
+   ```
+   Expected: `401`.
+
+5. **Every successful move writes a history row (see Task 2, step 1)** — confirm the `changedById` matches whichever user (admin or staff) performed the move.
+
+#### Part B — Frontend UI Enforcement
+
+6. **Detail page hides Move Stage controls for unauthorized staff:**
+
+   - Log in as staff, open the detail page of an application not assigned to them (via direct navigation/URL is not possible in this single-page app, so this is enforced primarily server-side — verify via Part A step 3).
+   - For an application assigned to them: the Move Stage buttons are visible and functional.
+
+7. **Pipeline card drag handle hidden when not permitted:**
+
+   - Log in as staff, open Pipeline.
+   - Expected: Cards for applications not assigned to this staff member render without the grip/drag handle (not draggable); assigned cards show the handle.
+
+8. **Drag-and-drop moves a card and calls the same endpoint:**
+
+   - Log in as admin, open Pipeline, drag a card from its column into an adjacent legal column.
+   - Expected: The card moves to the new column; `GET /api/applications/<id>/stage` shows a new history entry with the matching `toStage`.
+
+9. **Illegal drag target is rejected client-side:**
+
+   - Drag a card into a non-adjacent, non-legal column (e.g. `CLIENT_INQUIRY` straight into `QUALITY_REVIEW`).
+   - Expected: No request is sent, the card stays in its original column, and an inline error banner explains the invalid move.
+
+## Task 6 — Approved/Refused Decision Branching
+
+### Test Steps
+
+1. **Drive an application to `DECISION`:**
+
+   - Repeat legal one-step transitions (Task 1) until `currentStage` is `DECISION`.
+
+2. **Approve branches to the approved path:**
+
+   ```bash
+   curl -s -w "\nHTTP_STATUS:%{http_code}\n" -b admin.jar -X POST http://localhost:3000/api/applications/<APP_ID>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "VISA_APPROVED_PATH", "decisionStatus": "APPROVED"}'
+   ```
+   Expected: `200`, `currentStage: "VISA_APPROVED_PATH"`, `decisionStatus: "APPROVED"`.
+
+3. **Refuse branches to the refused path:** same as step 2 with `toStage: "VISA_REFUSED_PATH"`, `decisionStatus: "REFUSED"` on a different application at `DECISION`. Expected: `200`, `currentStage: "VISA_REFUSED_PATH"`.
+
+4. **Mismatched decision/stage pair rejected:**
+
+   ```bash
+   curl -s -w "\nHTTP_STATUS:%{http_code}\n" -b admin.jar -X POST http://localhost:3000/api/applications/<APP_ID>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "VISA_REFUSED_PATH", "decisionStatus": "APPROVED"}'
+   ```
+   Expected: `400` with `{ error: "Decision \"APPROVED\" must move the application to VISA_APPROVED_PATH" }`.
+
+5. **Withdrawn / Pending Action update `decisionStatus` without leaving `DECISION`:**
+
+   ```bash
+   curl -s -w "\nHTTP_STATUS:%{http_code}\n" -b admin.jar -X POST http://localhost:3000/api/applications/<APP_ID>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "DECISION", "decisionStatus": "WITHDRAWN"}'
+   ```
+   Expected: `200`, `currentStage` unchanged (`"DECISION"`), `decisionStatus: "WITHDRAWN"`, and a new history row is still recorded (`fromStage` === `toStage`).
+
+6. **Detail page decision buttons match this endpoint:**
+
+   - Log in as admin, open the detail page of an application at `DECISION`.
+   - Expected: Four buttons — Approve, Refuse, Mark Withdrawn, Pending Action — each calling the same endpoint/payload combinations as steps 2–5.
+
+7. **Build and lint verification:**
+
+   ```bash
+   npm run build
+   ```
+   Expected: "✓ Compiled successfully" with no new TypeScript errors.
+
+   ```bash
+   npm run lint
+   ```
+   Expected: No new errors beyond the codebase's pre-existing lint baseline.
