@@ -23,7 +23,7 @@ export async function GET() {
       where,
       orderBy: { createdAt: "desc" },
       include: {
-        client: { select: { id: true, fileNumber: true, firstName: true, lastName: true } },
+        client: { select: { id: true, fileNumber: true, firstName: true, lastName: true, assignedStaffId: true } },
         assignedStaff: { select: { id: true, name: true, email: true } },
       },
     });
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (currentUser.role !== "admin") {
+    if (currentUser.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Only administrators can create applications" },
         { status: 403 }
