@@ -915,6 +915,23 @@ export default function Home() {
     }
   };
 
+  const handleVerifyDocument = async (docId: number, newStatus: string) => {
+    try {
+      const res = await fetch("/api/documents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: docId, status: newStatus }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setDocuments((prev) => prev.map((d) => (d.id === docId ? data.document : d)));
+      }
+    } catch (err) {
+      console.error("Failed to verify document:", err);
+    }
+  };
+
   const handleUpdateTaskStatus = async (taskId: number, newStatus: string) => {
     try {
       const res = await fetch("/api/tasks", {
@@ -2990,23 +3007,84 @@ export default function Home() {
                               <p className="text-xs font-bold text-foreground">{d.fileName}</p>
                               <p className="text-[10px] text-muted-foreground">
                                 {d.client?.firstName} {d.client?.lastName} • {d.documentType}
-                                {d.verificationNotes && <span className="ml-2 text-yellow-500">{d.verificationNotes}</span>}
                               </p>
                             </div>
                           </div>
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                            d.status === "VERIFIED" ? "bg-green-500/10 text-green-600" :
-                            d.status === "REJECTED" ? "bg-red-500/10 text-red-500" :
-                            "bg-yellow-500/10 text-yellow-600"
-                          }`}>
-                            {d.status}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {user?.role === "ADMIN" && d.status === "PENDING" ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleVerifyDocument(d.id, "VERIFIED")}
+                                  className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer"
+                                >
+                                  ✓ Verify
+                                </button>
+                                <button
+                                  onClick={() => handleVerifyDocument(d.id, "REJECTED")}
+                                  className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer"
+                                >
+                                  ✕ Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                d.status === "VERIFIED" ? "bg-green-500/10 text-green-600" :
+                                d.status === "REJECTED" ? "bg-red-500/10 text-red-500" :
+                                "bg-yellow-500/10 text-yellow-600"
+                              }`}>
+                                {d.status}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* Review Queue — Admin Only */}
+              {user?.role === "ADMIN" && documents.filter((d: any) => d.status === "PENDING").length > 0 && (
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-yellow-500" /> Pending Review
+                    </h4>
+                    <span className="text-[10px] font-bold bg-yellow-500/10 text-yellow-600 px-2 py-0.5 rounded-full">
+                      {documents.filter((d: any) => d.status === "PENDING").length} pending
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {documents.filter((d: any) => d.status === "PENDING").map((d: any) => (
+                      <div key={d.id} className="flex justify-between items-center border border-border/60 p-3 rounded-xl">
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-xs font-bold text-foreground">{d.fileName}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {d.client?.firstName} {d.client?.lastName} • {d.documentType} • {d.uploadedBy?.name}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleVerifyDocument(d.id, "VERIFIED")}
+                            className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer"
+                          >
+                            ✓ Verify
+                          </button>
+                          <button
+                            onClick={() => handleVerifyDocument(d.id, "REJECTED")}
+                            className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer"
+                          >
+                            ✕ Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
