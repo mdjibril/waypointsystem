@@ -112,7 +112,7 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| [ ] Create task database model and API/actions | Developer 1 | `feature/task-model` | Client/application models |
+| [x] Create task database model and API/actions | Developer 1 | `feature/task-model` | Client/application models |
 | [ ] Build admin task creation and assignment UI | Developer 1 | `feature/admin-task-assignment` | Task model, staff management |
 | [ ] Build staff task dashboard | Developer 2 | `feature/staff-task-dashboard` | Task model |
 | [ ] Add task status updates, comments, and completion flow | Developer 2 | `feature/task-status-updates` | Staff task dashboard |

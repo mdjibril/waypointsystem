@@ -1735,3 +1735,144 @@ curl -s -c staff.jar -X POST http://localhost:3000/api/auth/login \
    npm run lint
    ```
    Expected: No new errors beyond the codebase's pre-existing lint baseline.
+
+---
+
+# Phase 5 — Test Plan: Task Assignment
+
+## Setup Commands
+
+```bash
+# Start the dev server
+npm run dev
+
+# Regenerate Prisma client after model changes
+npx prisma generate
+npx prisma migrate dev
+
+# Ensure we have test data
+curl -s -X POST http://localhost:3000/api/clients \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "TaskTest", "lastName": "Client", "email": "tasktest@example.com",
+    "phone": "+5555555555", "source": "website", "createdById": 1
+  }' | jq
+
+curl -s -X POST http://localhost:3000/api/applications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": <CLIENT_ID>,
+    "serviceType": "UK Tourist Visa",
+    "destinationCountry": "United Kingdom",
+    "travelPurpose": "Tourism"
+  }' | jq
+```
+
+---
+
+## Task 1 — Create task database model and API/actions
+
+### Test Steps
+
+1. **Prisma schema validation:**
+
+   ```bash
+   grep -A 20 "model Task" prisma/schema.prisma
+   ```
+   Expected: Task model with `id`, `title`, `description`, `clientId`, `applicationId`, `stage`, `assigneeId`, `assignedById`, `priority`, `status`, `dueDate`, `completedAt`, `@@map("tasks")`.
+
+   ```bash
+   npm run db:generate
+   ```
+   Expected: "✔ Generated Prisma Client" with no errors.
+
+2. **Migration file exists:**
+
+   ```bash
+   ls prisma/migrations/*add_task_model/migration.sql
+   ```
+   Expected: Migration file creates the `tasks` table with foreign keys to `clients`, `applications`, and `users`.
+
+3. **API — POST /api/tasks (create task):**
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{
+       "title": "Review passport documents",
+       "description": "Check passport validity and expiry date",
+       "clientId": <CLIENT_ID>,
+       "applicationId": <APP_ID>,
+       "stage": "DOCUMENT_COLLECTION_VERIFICATION",
+       "assigneeId": 2,
+       "priority": "HIGH",
+       "dueDate": "2026-08-01T00:00:00.000Z"
+     }' | jq
+   ```
+   Expected: Returns 201. `status` defaults to `"TODO"`, `assignedBy` nested object present, `assignee` nested object present.
+
+4. **API — POST /api/tasks (validation):**
+
+   ```bash
+   # Missing required fields
+   curl -s -X POST http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"title": "No client"}' | jq
+   ```
+   Expected: Returns 400 with `{ error: "Title and client ID are required" }`.
+
+5. **API — GET /api/tasks (list tasks):**
+
+   ```bash
+   curl -s http://localhost:3000/api/tasks | jq
+   ```
+   Expected: Returns 200 with `{ tasks: [...] }`. Each task includes nested `client`, `application`, `assignee`, and `assignedBy`.
+
+6. **API — PATCH /api/tasks (update task):**
+
+   ```bash
+   # Update status to IN_PROGRESS
+   curl -s -X PATCH http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"id": 1, "status": "IN_PROGRESS"}' | jq
+   ```
+   Expected: Returns 200. `status` is now `"IN_PROGRESS"`, `completedAt` remains `null`.
+
+   ```bash
+   # Mark as done
+   curl -s -X PATCH http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"id": 1, "status": "DONE"}' | jq
+   ```
+   Expected: Returns 200. `status` is `"DONE"`, `completedAt` is set to the current timestamp.
+
+   ```bash
+   # Update priority and reassign
+   curl -s -X PATCH http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"id": 1, "priority": "URGENT", "assigneeId": 2}' | jq
+   ```
+   Expected: Returns 200. `priority` is `"URGENT"`, `assignee` is updated.
+
+   ```bash
+   # Missing id
+   curl -s -X PATCH http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"title": "No ID"}' | jq
+   ```
+   Expected: Returns 400 with `{ error: "Task ID is required" }`.
+
+   ```bash
+   # Non-existent task
+   curl -s -X PATCH http://localhost:3000/api/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"id": 9999, "status": "DONE"}' | jq
+   ```
+   Expected: Returns 404 with `{ error: "Task not found" }`.
+
+7. **Build verification:**
+
+   ```bash
+   npm run build
+   ```
+   Expected: "✓ Compiled successfully". `/api/tasks` appears as a dynamic route (ƒ).

@@ -32,7 +32,8 @@ import {
   Edit,
   Workflow,
   History,
-  GripVertical
+  GripVertical,
+  CheckSquare
 } from "lucide-react";
 import {
   DndContext,
@@ -205,6 +206,22 @@ export default function Home() {
   const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [activeDragApp, setActiveDragApp] = useState<any>(null);
 
+  // Task Management State
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDescription, setNewTaskDescription] = useState("");
+  const [newTaskClientId, setNewTaskClientId] = useState("");
+  const [newTaskApplicationId, setNewTaskApplicationId] = useState("");
+  const [newTaskStage, setNewTaskStage] = useState("");
+  const [newTaskAssigneeId, setNewTaskAssigneeId] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState("MEDIUM");
+  const [newTaskDueDate, setNewTaskDueDate] = useState("");
+  const [addTaskError, setAddTaskError] = useState<string | null>(null);
+  const [addTaskSuccess, setAddTaskSuccess] = useState<string | null>(null);
+  const [addTaskLoading, setAddTaskLoading] = useState(false);
+
   // Sync profile fields when user is loaded
   useEffect(() => {
     if (user) {
@@ -295,6 +312,29 @@ export default function Home() {
     if (currentTab === "applications" || currentTab === "pipeline") {
       fetchApplications();
       if (clients.length === 0) fetchClients();
+    }
+  }, [currentTab]);
+
+  // Load tasks when Tasks tab is selected
+  const fetchTasks = async () => {
+    setTasksLoading(true);
+    try {
+      const res = await fetch("/api/tasks");
+      const data = await res.json();
+      if (res.ok) {
+        setTasks(data.tasks);
+      }
+    } catch (err) {
+      console.error("Failed to load tasks:", err);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentTab === "tasks") {
+      fetchTasks();
+      if (staffUsers.length === 0) fetchStaff();
     }
   }, [currentTab]);
 
@@ -686,6 +726,51 @@ export default function Home() {
       setEditClientError("Connection error. Please try again.");
     } finally {
       setEditClientLoading(false);
+    }
+  };
+
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddTaskLoading(true);
+    setAddTaskError(null);
+    setAddTaskSuccess(null);
+
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newTaskTitle,
+          description: newTaskDescription || undefined,
+          clientId: Number(newTaskClientId),
+          applicationId: newTaskApplicationId ? Number(newTaskApplicationId) : undefined,
+          stage: newTaskStage || undefined,
+          assigneeId: newTaskAssigneeId ? Number(newTaskAssigneeId) : undefined,
+          priority: newTaskPriority,
+          dueDate: newTaskDueDate || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setAddTaskError(data.error || "Failed to create task");
+      } else {
+        setAddTaskSuccess("Task created successfully!");
+        setNewTaskTitle("");
+        setNewTaskDescription("");
+        setNewTaskClientId("");
+        setNewTaskApplicationId("");
+        setNewTaskStage("");
+        setNewTaskAssigneeId("");
+        setNewTaskPriority("MEDIUM");
+        setNewTaskDueDate("");
+        fetchTasks();
+      }
+    } catch (err) {
+      setAddTaskError("Connection error. Please try again.");
+    } finally {
+      setAddTaskLoading(false);
     }
   };
 
@@ -2040,50 +2125,269 @@ export default function Home() {
                   <h3 className="text-lg font-bold text-foreground">Task Manager</h3>
                   <p className="text-xs text-muted-foreground">Assign, update, and track workload deliverables.</p>
                 </div>
-                <button className="bg-primary text-primary-foreground text-xs font-semibold px-4 py-2 rounded-xl shadow-md shadow-primary/10">
-                  Create Task
+                {user?.role === "ADMIN" && (
+                <button
+                  onClick={() => {
+                    setIsAddTaskOpen(true);
+                    setAddTaskError(null);
+                    setAddTaskSuccess(null);
+                  }}
+                  className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" /> Create Task
                 </button>
+                )}
               </div>
 
-              {/* Kanban Mockup */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {["To Do", "In Progress", "Completed"].map((col, idx) => (
-                  <div key={idx} className="bg-card border border-border rounded-2xl p-4 shadow-sm flex flex-col min-h-96">
-                    <div className="flex justify-between items-center mb-4 pb-2 border-b border-border">
-                      <span className="font-bold text-xs text-foreground">{col}</span>
-                      <span className="text-[10px] font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                        {idx === 0 ? "2" : idx === 1 ? "1" : "3"}
-                      </span>
+              {/* Create Task Modal */}
+              {isAddTaskOpen && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                  <div className="bg-card border border-border w-full max-w-lg rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
+                      <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                        <CheckSquare className="h-4 w-4 text-primary" /> Create New Task
+                      </h4>
+                      <button
+                        onClick={() => setIsAddTaskOpen(false)}
+                        className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer"
+                      >
+                        Cancel
+                      </button>
                     </div>
-                    <div className="space-y-3 flex-1">
-                      {idx === 0 && (
-                        <>
-                          <div className="bg-muted/30 border border-border p-3 rounded-xl cursor-grab hover:border-primary/50 transition-colors">
-                            <p className="text-xs font-bold text-foreground">Draft cover letter</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Client: Samantha Cooper</p>
-                          </div>
-                          <div className="bg-muted/30 border border-border p-3 rounded-xl cursor-grab hover:border-primary/50 transition-colors">
-                            <p className="text-xs font-bold text-foreground">Upload flight itinerary</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Client: Alice Green</p>
-                          </div>
-                        </>
-                      )}
-                      {idx === 1 && (
-                        <div className="bg-muted/30 border border-border p-3 rounded-xl cursor-grab hover:border-primary/50 transition-colors">
-                          <p className="text-xs font-bold text-foreground">Verify passport scans</p>
-                          <p className="text-[10px] text-muted-foreground mt-1">Client: David Miller</p>
+
+                    <form onSubmit={handleCreateTask} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                      {addTaskError && (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+                          {addTaskError}
                         </div>
                       )}
-                      {idx === 2 && (
-                        <div className="bg-muted/10 border border-border/40 p-3 rounded-xl opacity-60">
-                          <p className="text-xs font-bold text-foreground line-through">Payment confirmation</p>
-                          <p className="text-[10px] text-muted-foreground mt-1">Completed by Admin</p>
+                      {addTaskSuccess && (
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-xs font-semibold text-green-600">
+                          {addTaskSuccess}
                         </div>
                       )}
-                    </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Title *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newTaskTitle}
+                          onChange={(e) => setNewTaskTitle(e.target.value)}
+                          placeholder="e.g. Review passport documents"
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Description</label>
+                        <textarea
+                          value={newTaskDescription}
+                          onChange={(e) => setNewTaskDescription(e.target.value)}
+                          placeholder="Task details and instructions..."
+                          rows={2}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground resize-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Client *</label>
+                        <select
+                          required
+                          value={newTaskClientId}
+                          onChange={(e) => setNewTaskClientId(e.target.value)}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        >
+                          <option value="">Select a client...</option>
+                          {clients.map((c: any) => (
+                            <option key={c.id} value={c.id}>
+                              {c.fileNumber} — {c.firstName} {c.lastName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Application</label>
+                          <select
+                            value={newTaskApplicationId}
+                            onChange={(e) => setNewTaskApplicationId(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            <option value="">None</option>
+                            {applications
+                              .filter((a: any) => newTaskClientId && a.clientId === Number(newTaskClientId))
+                              .map((a: any) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.serviceType} — {a.client?.fileNumber}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Workflow Stage</label>
+                          <select
+                            value={newTaskStage}
+                            onChange={(e) => setNewTaskStage(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            <option value="">None</option>
+                            {STAGE_ORDER.map((stage) => (
+                              <option key={stage} value={stage}>
+                                {STAGE_LABELS[stage]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Assignee</label>
+                          <select
+                            value={newTaskAssigneeId}
+                            onChange={(e) => setNewTaskAssigneeId(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            <option value="">Unassigned</option>
+                            {staffUsers.map((s: any) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Priority</label>
+                          <select
+                            value={newTaskPriority}
+                            onChange={(e) => setNewTaskPriority(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            <option value="LOW">Low</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="HIGH">High</option>
+                            <option value="URGENT">Urgent</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Due Date</label>
+                          <input
+                            type="date"
+                            value={newTaskDueDate}
+                            onChange={(e) => setNewTaskDueDate(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          disabled={addTaskLoading}
+                          className="w-full bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center justify-center gap-2 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {addTaskLoading ? (
+                            <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                          ) : (
+                            <>Create Task</>
+                          )}
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {/* Tasks Table */}
+              {tasksLoading ? (
+                <div className="py-20 flex justify-center items-center">
+                  <div className="h-10 w-10 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : tasks.length === 0 ? (
+                <div className="bg-card border border-dashed border-border rounded-2xl py-20 flex flex-col items-center justify-center text-center">
+                  <CheckSquare className="h-12 w-12 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm font-bold text-muted-foreground">No tasks yet</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">Create a task to get started</p>
+                </div>
+              ) : (
+                <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/20">
+                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Task</th>
+                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Client</th>
+                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Stage</th>
+                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Assignee</th>
+                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Priority</th>
+                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Due</th>
+                          <th className="text-left p-4 font-bold text-muted-foreground uppercase text-[10px]">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tasks.map((t: any) => (
+                          <tr key={t.id} className="border-b border-border/60 hover:bg-muted/10 transition-colors">
+                            <td className="p-4">
+                              <p className="font-bold text-foreground">{t.title}</p>
+                              {t.description && (
+                                <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-xs">{t.description}</p>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <p className="font-semibold text-foreground">{t.client?.firstName} {t.client?.lastName}</p>
+                              <p className="text-[10px] text-muted-foreground font-mono">{t.client?.fileNumber}</p>
+                            </td>
+                            <td className="p-4">
+                              {t.stage ? (
+                                <span className="text-[10px] font-semibold text-foreground">{STAGE_LABELS[t.stage as keyof typeof STAGE_LABELS] || t.stage}</span>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              {t.assignee ? (
+                                <span className="text-[10px] font-semibold text-foreground">{t.assignee.name}</span>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">Unassigned</span>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                t.priority === "URGENT" ? "bg-red-500/10 text-red-600" :
+                                t.priority === "HIGH" ? "bg-orange-500/10 text-orange-600" :
+                                t.priority === "MEDIUM" ? "bg-blue-500/10 text-blue-600" :
+                                "bg-muted text-muted-foreground"
+                              }`}>
+                                {t.priority}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className="text-[10px] font-semibold text-foreground">
+                                {t.dueDate
+                                  ? new Date(t.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+                                  : "—"}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                t.status === "DONE" ? "bg-green-500/10 text-green-600" :
+                                t.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
+                                t.status === "WAITING" ? "bg-yellow-500/10 text-yellow-600" :
+                                t.status === "CANCELLED" ? "bg-red-500/10 text-red-600" :
+                                "bg-muted text-muted-foreground"
+                              }`}>
+                                {t.status.replace(/_/g, " ")}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
