@@ -33,7 +33,11 @@ import {
   Workflow,
   History,
   GripVertical,
-  CheckSquare
+  CheckSquare,
+  Wallet,
+  Receipt,
+  RefreshCw,
+  Download
 } from "lucide-react";
 import {
   DndContext,
@@ -47,6 +51,24 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { STAGE_ORDER, STAGE_LABELS, getAllowedNextStages } from "@/lib/workflow";
+import { CURRENCY_PRESETS, formatAmount } from "@/lib/currency";
+import { amountToWords } from "@/lib/numberToWords";
+import { downloadReceiptPdf } from "@/lib/receiptPdf";
+
+const RECEIPT_SERVICE_OPTIONS = [
+  "Consultation",
+  "Visa Consultancy",
+  "Visa Services",
+  "Travel Services",
+  "International Relocation",
+  "Medical Tourism",
+  "Childbirth Abroad",
+  "Admission Assistance",
+];
+
+function generateReceiptNumber(): string {
+  return `RCT-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+}
 
 function PipelineCard({ app, draggable, onOpen }: { app: any; draggable: boolean; onOpen: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -108,6 +130,16 @@ function PipelineColumn({ stage, apps, dropState, children }: { stage: string; a
       </div>
     </div>
   );
+}
+
+function outstandingByCurrency(paymentsList: any[]): { currency: string; total: number }[] {
+  const totals: Record<string, number> = {};
+  paymentsList
+    .filter((p: any) => p.status === "PENDING")
+    .forEach((p: any) => {
+      totals[p.currency] = (totals[p.currency] || 0) + p.amount;
+    });
+  return Object.entries(totals).map(([currency, total]) => ({ currency, total }));
 }
 
 export default function Home() {
@@ -248,6 +280,38 @@ export default function Home() {
   const [addDocSuccess, setAddDocSuccess] = useState<string | null>(null);
   const [addDocLoading, setAddDocLoading] = useState(false);
 
+  // Payments State
+  const [payments, setPayments] = useState<any[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
+  const [newPaymentClientId, setNewPaymentClientId] = useState("");
+  const [newPaymentApplicationId, setNewPaymentApplicationId] = useState("");
+  const [newPaymentAmount, setNewPaymentAmount] = useState("");
+  const [newPaymentCurrency, setNewPaymentCurrency] = useState("NGN");
+  const [newPaymentCurrencyOther, setNewPaymentCurrencyOther] = useState("");
+  const [newPaymentMethod, setNewPaymentMethod] = useState("");
+  const [newPaymentNotes, setNewPaymentNotes] = useState("");
+  const [newPaymentFile, setNewPaymentFile] = useState<File | null>(null);
+  const [addPaymentError, setAddPaymentError] = useState<string | null>(null);
+  const [addPaymentSuccess, setAddPaymentSuccess] = useState<string | null>(null);
+  const [addPaymentLoading, setAddPaymentLoading] = useState(false);
+
+  // Receipt Generator State
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [receiptClientMode, setReceiptClientMode] = useState<"saved" | "manual">("saved");
+  const [receiptClientId, setReceiptClientId] = useState("");
+  const [receiptName, setReceiptName] = useState("");
+  const [receiptNumber, setReceiptNumber] = useState("");
+  const [receiptServices, setReceiptServices] = useState<string[]>([]);
+  const [receiptCurrency, setReceiptCurrency] = useState("NGN");
+  const [receiptCurrencyOther, setReceiptCurrencyOther] = useState("");
+  const [receiptAmount, setReceiptAmount] = useState("");
+  const [receiptMethod, setReceiptMethod] = useState("Bank Transfer");
+  const [receiptDate, setReceiptDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [receiptDescription, setReceiptDescription] = useState("");
+  const [receiptClientEmail, setReceiptClientEmail] = useState("");
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+
   // Sync profile fields when user is loaded
   useEffect(() => {
     if (user) {
@@ -378,6 +442,7 @@ export default function Home() {
       if (clients.length === 0) fetchClients();
       if (applications.length === 0) fetchApplications();
       fetchDocuments();
+      fetchPayments();
     }
   }, [currentTab]);
 
@@ -404,6 +469,28 @@ export default function Home() {
     if (currentTab === "documents") {
       fetchDocuments();
       if (clients.length === 0) fetchClients();
+    }
+  }, [currentTab]);
+
+  // Load payments when the Payments tab is selected
+  const fetchPayments = async () => {
+    setPaymentsLoading(true);
+    try {
+      const res = await fetch("/api/payments");
+      const data = await res.json();
+      if (res.ok) setPayments(data.payments);
+    } catch (err) {
+      console.error("Failed to load payments:", err);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentTab === "payments") {
+      fetchPayments();
+      if (clients.length === 0) fetchClients();
+      if (applications.length === 0) fetchApplications();
     }
   }, [currentTab]);
 
@@ -556,7 +643,7 @@ export default function Home() {
 
   // Enforce role-based access control inside client
   useEffect(() => {
-    const adminOnlyTabs = ["payments", "reviews", "reports", "staff"];
+    const adminOnlyTabs = ["reviews", "reports", "staff"];
     if (user && user.role.toUpperCase() !== "ADMIN" && adminOnlyTabs.includes(currentTab)) {
       setCurrentTab("dashboard");
     }
@@ -947,6 +1034,158 @@ export default function Home() {
     }
   };
 
+  const handleAddPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddPaymentLoading(true);
+    setAddPaymentError(null);
+    setAddPaymentSuccess(null);
+
+    try {
+      let receiptUrl = null;
+      if (newPaymentFile) {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(newPaymentFile);
+        });
+        receiptUrl = base64;
+      }
+
+      const currency = newPaymentCurrency === "OTHER" ? newPaymentCurrencyOther.trim().toUpperCase() : newPaymentCurrency;
+
+      const res = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: newPaymentClientId ? Number(newPaymentClientId) : undefined,
+          applicationId: newPaymentApplicationId ? Number(newPaymentApplicationId) : undefined,
+          amount: newPaymentAmount ? Number(newPaymentAmount) : undefined,
+          currency,
+          method: newPaymentMethod || undefined,
+          notes: newPaymentNotes || undefined,
+          receiptFileName: newPaymentFile?.name,
+          receiptUrl,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setAddPaymentError(data.error || "Failed to record payment");
+      } else {
+        setAddPaymentSuccess("Payment recorded successfully!");
+        setNewPaymentClientId("");
+        setNewPaymentApplicationId("");
+        setNewPaymentAmount("");
+        setNewPaymentCurrency("NGN");
+        setNewPaymentCurrencyOther("");
+        setNewPaymentMethod("");
+        setNewPaymentNotes("");
+        setNewPaymentFile(null);
+        setIsAddPaymentOpen(false);
+        fetchPayments();
+      }
+    } catch (err) {
+      setAddPaymentError("Connection error. Please try again.");
+    } finally {
+      setAddPaymentLoading(false);
+    }
+  };
+
+  const handleUpdatePaymentStatus = async (paymentId: number, newStatus: string) => {
+    try {
+      const res = await fetch("/api/payments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: paymentId, status: newStatus }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setPayments((prev) => prev.map((p) => (p.id === paymentId ? data.payment : p)));
+      }
+    } catch (err) {
+      console.error("Failed to update payment:", err);
+    }
+  };
+
+  const resetReceiptForm = () => {
+    setReceiptClientMode("saved");
+    setReceiptClientId("");
+    setReceiptName("");
+    setReceiptNumber("");
+    setReceiptServices([]);
+    setReceiptCurrency("NGN");
+    setReceiptCurrencyOther("");
+    setReceiptAmount("");
+    setReceiptMethod("Bank Transfer");
+    setReceiptDate(new Date().toISOString().slice(0, 10));
+    setReceiptDescription("");
+    setReceiptClientEmail("");
+    setReceiptError(null);
+  };
+
+  const toggleReceiptService = (service: string) => {
+    setReceiptServices((prev) =>
+      prev.includes(service) ? prev.filter((s) => s !== service) : [...prev, service]
+    );
+  };
+
+  const getReceiptName = () => {
+    if (receiptClientMode === "saved") {
+      const client = clients.find((c: any) => String(c.id) === receiptClientId);
+      return client ? `${client.firstName} ${client.lastName}` : "";
+    }
+    return receiptName.trim();
+  };
+
+  const getReceiptCurrency = () => (receiptCurrency === "OTHER" ? receiptCurrencyOther.trim().toUpperCase() : receiptCurrency);
+
+  const handleGenerateReceipt = () => {
+    const name = getReceiptName();
+    const amount = Number(receiptAmount);
+    const currency = getReceiptCurrency();
+
+    if (!name) {
+      setReceiptError("Select an existing client or type a name.");
+      return;
+    }
+    if (!amount || amount <= 0) {
+      setReceiptError("Enter a valid amount.");
+      return;
+    }
+    if (!currency) {
+      setReceiptError("Select or enter a currency.");
+      return;
+    }
+    if (receiptServices.length === 0) {
+      setReceiptError("Select at least one service.");
+      return;
+    }
+
+    setReceiptError(null);
+    setReceiptNumber(generateReceiptNumber());
+  };
+
+  const handleDownloadReceiptPdf = () => {
+    if (!receiptNumber) return;
+    const amount = Number(receiptAmount) || 0;
+    const currency = getReceiptCurrency();
+    downloadReceiptPdf({
+      receiptNumber,
+      date: receiptDate,
+      name: getReceiptName(),
+      services: receiptServices,
+      amount,
+      currency,
+      amountWords: amountToWords(amount, currency),
+      method: receiptMethod,
+      description: receiptDescription || undefined,
+      email: receiptClientEmail || undefined,
+    });
+  };
+
   const handleUpdateTaskStatus = async (taskId: number, newStatus: string) => {
     try {
       const res = await fetch("/api/tasks", {
@@ -1141,7 +1380,7 @@ export default function Home() {
               </div>
 
               {/* Status Metric Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                 <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
                   <div className="flex justify-between items-start">
                     <div className="bg-blue-500/10 p-2.5 rounded-xl text-blue-500">
@@ -1182,6 +1421,24 @@ export default function Home() {
                     {tasks.filter((t: any) => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "DONE" && t.status !== "CANCELLED").length}
                   </h4>
                   <p className="text-xs text-muted-foreground font-medium mt-1">Overdue Staff Tasks</p>
+                </div>
+
+                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div className="bg-green-500/10 p-2.5 rounded-xl text-green-600">
+                      <Wallet className="h-5 w-5" />
+                    </div>
+                  </div>
+                  {outstandingByCurrency(payments).length === 0 ? (
+                    <h4 className="text-2xl font-black mt-4 text-foreground">—</h4>
+                  ) : (
+                    <div className="mt-4 space-y-0.5">
+                      {outstandingByCurrency(payments).map((o) => (
+                        <h4 key={o.currency} className="text-lg font-black text-foreground leading-tight">{formatAmount(o.total, o.currency)}</h4>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground font-medium mt-1">Outstanding Balance</p>
                 </div>
               </div>
 
@@ -1954,6 +2211,42 @@ export default function Home() {
                   </div>
                 )}
               </div>
+
+              {/* Client Payments */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-primary" /> Payments
+                </h4>
+                {payments.filter((p: any) => p.clientId === selectedClient.id).length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center">No payments recorded for this client</p>
+                ) : (
+                  <>
+                    <div className="space-y-2 mb-4">
+                      {payments.filter((p: any) => p.clientId === selectedClient.id).map((p: any) => (
+                        <div key={p.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-primary/50 transition-colors bg-muted/10">
+                          <div>
+                            <p className="text-xs font-bold text-foreground font-mono">{p.invoiceNumber}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatAmount(p.amount, p.currency)} · {p.method || "No method"}</p>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            p.status === "CONFIRMED" ? "bg-green-500/10 text-green-600" :
+                            p.status === "REJECTED" ? "bg-red-500/10 text-red-500" :
+                            "bg-yellow-500/10 text-yellow-600"
+                          }`}>{p.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {outstandingByCurrency(payments.filter((p: any) => p.clientId === selectedClient.id)).length > 0 && (
+                      <div className="border-t border-border pt-3 flex flex-wrap gap-x-4 gap-y-1">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Outstanding:</span>
+                        {outstandingByCurrency(payments.filter((p: any) => p.clientId === selectedClient.id)).map((o) => (
+                          <span key={o.currency} className="text-xs font-bold text-foreground">{formatAmount(o.total, o.currency)}</span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           ) : null}
 
@@ -2351,6 +2644,42 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
+                )}
+              </div>
+
+              {/* Application Payments */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-primary" /> Payments
+                </h4>
+                {payments.filter((p: any) => p.applicationId === selectedApplication.id).length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center">No payments recorded for this application</p>
+                ) : (
+                  <>
+                    <div className="space-y-2 mb-4">
+                      {payments.filter((p: any) => p.applicationId === selectedApplication.id).map((p: any) => (
+                        <div key={p.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-primary/50 transition-colors bg-muted/10">
+                          <div>
+                            <p className="text-xs font-bold text-foreground font-mono">{p.invoiceNumber}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatAmount(p.amount, p.currency)} · {p.method || "No method"}</p>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            p.status === "CONFIRMED" ? "bg-green-500/10 text-green-600" :
+                            p.status === "REJECTED" ? "bg-red-500/10 text-red-500" :
+                            "bg-yellow-500/10 text-yellow-600"
+                          }`}>{p.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {outstandingByCurrency(payments.filter((p: any) => p.applicationId === selectedApplication.id)).length > 0 && (
+                      <div className="border-t border-border pt-3 flex flex-wrap gap-x-4 gap-y-1">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Outstanding:</span>
+                        {outstandingByCurrency(payments.filter((p: any) => p.applicationId === selectedApplication.id)).map((o) => (
+                          <span key={o.currency} className="text-xs font-bold text-foreground">{formatAmount(o.total, o.currency)}</span>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -3114,28 +3443,525 @@ export default function Home() {
             </div>
           )}
 
-          {/* Admin Protected: Payments */}
-          {currentTab === "payments" && user?.role.toUpperCase() === "ADMIN" && (
+          {/* Payments */}
+          {currentTab === "payments" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-bold text-foreground">Invoicing & Payments</h3>
                   <p className="text-xs text-muted-foreground">Track transaction history, outstanding balances, and receipt validations.</p>
                 </div>
-                <button className="bg-primary text-primary-foreground text-xs font-semibold px-4 py-2 rounded-xl shadow-md cursor-pointer">
-                  New Invoice
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      resetReceiptForm();
+                      setIsReceiptModalOpen(true);
+                    }}
+                    className="bg-card border border-border text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 text-foreground hover:bg-secondary transition-all cursor-pointer"
+                  >
+                    <Receipt className="h-4 w-4" /> Generate Receipt
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsAddPaymentOpen(true);
+                      setAddPaymentError(null);
+                      setAddPaymentSuccess(null);
+                    }}
+                    className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" /> Record Payment
+                  </button>
+                </div>
               </div>
 
-              {/* Grid of payments */}
-              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                <div className="h-64 flex flex-col items-center justify-center border border-dashed border-border rounded-xl bg-muted/10">
-                  <CreditCard className="h-8 w-8 text-muted-foreground/60 mb-2" />
-                  <p className="text-xs font-bold text-foreground">Invoice Tracking Panel</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Manage service fee invoicing and balances. Accessible to Administrators.
-                  </p>
+              {/* Record Payment Modal */}
+              {isAddPaymentOpen && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                  <div className="bg-card border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
+                      <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-primary" /> Record Payment
+                      </h4>
+                      <button
+                        onClick={() => setIsAddPaymentOpen(false)}
+                        className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <form onSubmit={handleAddPayment} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                      {addPaymentError && (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+                          {addPaymentError}
+                        </div>
+                      )}
+                      {addPaymentSuccess && (
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-xs font-semibold text-green-600">
+                          {addPaymentSuccess}
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Client *</label>
+                        <select
+                          required
+                          value={newPaymentClientId}
+                          onChange={(e) => { setNewPaymentClientId(e.target.value); setNewPaymentApplicationId(""); }}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        >
+                          <option value="">Select a client...</option>
+                          {clients
+                            .filter((c: any) => user?.role.toUpperCase() === "ADMIN" || c.assignedStaffId === user?.id)
+                            .map((c: any) => (
+                              <option key={c.id} value={c.id}>
+                                {c.fileNumber} — {c.firstName} {c.lastName}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Application</label>
+                        <select
+                          value={newPaymentApplicationId}
+                          onChange={(e) => setNewPaymentApplicationId(e.target.value)}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        >
+                          <option value="">No application (client-level)</option>
+                          {applications
+                            .filter((a: any) => a.clientId === Number(newPaymentClientId))
+                            .map((a: any) => (
+                              <option key={a.id} value={a.id}>
+                                {a.serviceType} — {a.destinationCountry}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Amount *</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            required
+                            value={newPaymentAmount}
+                            onChange={(e) => setNewPaymentAmount(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Currency *</label>
+                          <select
+                            required
+                            value={newPaymentCurrency}
+                            onChange={(e) => setNewPaymentCurrency(e.target.value)}
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          >
+                            {CURRENCY_PRESETS.map((c) => (
+                              <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
+                            ))}
+                            <option value="OTHER">Other...</option>
+                          </select>
+                        </div>
+                      </div>
+                      {newPaymentCurrency === "OTHER" && (
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Custom Currency Code *</label>
+                          <input
+                            type="text"
+                            required
+                            value={newPaymentCurrencyOther}
+                            onChange={(e) => setNewPaymentCurrencyOther(e.target.value)}
+                            placeholder="e.g. EUR, CAD"
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Payment Method</label>
+                        <select
+                          value={newPaymentMethod}
+                          onChange={(e) => setNewPaymentMethod(e.target.value)}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        >
+                          <option value="">Select method...</option>
+                          <option value="Bank Transfer">Bank Transfer</option>
+                          <option value="Cash">Cash</option>
+                          <option value="Card">Card</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Notes</label>
+                        <input
+                          type="text"
+                          value={newPaymentNotes}
+                          onChange={(e) => setNewPaymentNotes(e.target.value)}
+                          placeholder="Optional note"
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Receipt Upload</label>
+                        <input
+                          type="file"
+                          onChange={(e) => setNewPaymentFile(e.target.files?.[0] || null)}
+                          className="w-full text-xs text-foreground file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground hover:file:opacity-90 file:cursor-pointer cursor-pointer bg-muted/20 border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                        />
+                        {newPaymentFile && (
+                          <p className="text-[10px] text-muted-foreground">Selected: {newPaymentFile.name} ({(newPaymentFile.size / 1024).toFixed(1)} KB)</p>
+                        )}
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={addPaymentLoading}
+                        className="w-full bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center justify-center gap-2 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {addPaymentLoading ? (
+                          <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                        ) : (
+                          <>Record Payment</>
+                        )}
+                      </button>
+                    </form>
+                  </div>
                 </div>
+              )}
+
+              {/* Generate Receipt Modal */}
+              {isReceiptModalOpen && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                  <div className="bg-card border border-border w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+                    <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20 flex-shrink-0">
+                      <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                        <Receipt className="h-4 w-4 text-primary" /> Generate Receipt
+                      </h4>
+                      <button
+                        onClick={() => setIsReceiptModalOpen(false)}
+                        className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    <div className="p-6 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Form */}
+                      <div className="space-y-4">
+                        {receiptError && (
+                          <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+                            {receiptError}
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Client</label>
+                          <div className="flex gap-2 mb-2">
+                            <button
+                              type="button"
+                              onClick={() => setReceiptClientMode("saved")}
+                              className={`text-xs font-bold px-3 py-1.5 rounded-lg cursor-pointer ${
+                                receiptClientMode === "saved" ? "bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground"
+                              }`}
+                            >
+                              Existing Client
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setReceiptClientMode("manual")}
+                              className={`text-xs font-bold px-3 py-1.5 rounded-lg cursor-pointer ${
+                                receiptClientMode === "manual" ? "bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground"
+                              }`}
+                            >
+                              Type Name
+                            </button>
+                          </div>
+                          {receiptClientMode === "saved" ? (
+                            <select
+                              value={receiptClientId}
+                              onChange={(e) => setReceiptClientId(e.target.value)}
+                              className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                            >
+                              <option value="">Select a client...</option>
+                              {clients.map((c: any) => (
+                                <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={receiptName}
+                              onChange={(e) => setReceiptName(e.target.value)}
+                              placeholder="Client name"
+                              className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                            />
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Receipt Number</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              readOnly
+                              value={receiptNumber}
+                              placeholder="Generated on submit"
+                              className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs font-mono text-foreground"
+                            />
+                            {receiptNumber && (
+                              <button
+                                type="button"
+                                onClick={() => setReceiptNumber(generateReceiptNumber())}
+                                title="Regenerate"
+                                className="p-2 rounded-xl border border-border hover:bg-secondary cursor-pointer flex-shrink-0"
+                              >
+                                <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Services</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {RECEIPT_SERVICE_OPTIONS.map((service) => (
+                              <label key={service} className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={receiptServices.includes(service)}
+                                  onChange={() => toggleReceiptService(service)}
+                                  className="rounded"
+                                />
+                                {service}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase">Amount</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={receiptAmount}
+                              onChange={(e) => setReceiptAmount(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase">Currency</label>
+                            <select
+                              value={receiptCurrency}
+                              onChange={(e) => setReceiptCurrency(e.target.value)}
+                              className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                            >
+                              {CURRENCY_PRESETS.map((c) => (
+                                <option key={c.code} value={c.code}>{c.code} ({c.symbol})</option>
+                              ))}
+                              <option value="OTHER">Other...</option>
+                            </select>
+                          </div>
+                        </div>
+                        {receiptCurrency === "OTHER" && (
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase">Custom Currency Code</label>
+                            <input
+                              type="text"
+                              value={receiptCurrencyOther}
+                              onChange={(e) => setReceiptCurrencyOther(e.target.value)}
+                              placeholder="e.g. EUR, CAD"
+                              className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                            />
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Amount in Words</label>
+                          <p className="text-xs italic text-muted-foreground bg-muted/20 border border-border rounded-xl px-3 py-2 min-h-[2.25rem]">
+                            {Number(receiptAmount) > 0 ? amountToWords(Number(receiptAmount), getReceiptCurrency() || "NGN") : "—"}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase">Payment Method</label>
+                            <select
+                              value={receiptMethod}
+                              onChange={(e) => setReceiptMethod(e.target.value)}
+                              className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                            >
+                              <option value="Bank Transfer">Bank Transfer</option>
+                              <option value="Cash">Cash</option>
+                              <option value="Card">Card</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase">Payment Date</label>
+                            <input
+                              type="date"
+                              value={receiptDate}
+                              onChange={(e) => setReceiptDate(e.target.value)}
+                              className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Description (Optional)</label>
+                          <input
+                            type="text"
+                            value={receiptDescription}
+                            onChange={(e) => setReceiptDescription(e.target.value)}
+                            placeholder="Optional note"
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase">Client Email</label>
+                          <input
+                            type="email"
+                            value={receiptClientEmail}
+                            onChange={(e) => setReceiptClientEmail(e.target.value)}
+                            placeholder="client@example.com"
+                            className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-2">
+                          <button
+                            type="button"
+                            onClick={handleGenerateReceipt}
+                            className="w-full bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 hover:opacity-90 transition-all cursor-pointer"
+                          >
+                            Generate Receipt
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!receiptNumber}
+                            onClick={handleDownloadReceiptPdf}
+                            className="w-full bg-card border border-border text-xs font-bold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 text-foreground hover:bg-secondary transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <Download className="h-3.5 w-3.5" /> Download PDF
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Live Preview */}
+                      <div className="bg-muted/10 border border-border rounded-2xl p-6">
+                        <div className="bg-white text-black rounded-xl p-6 shadow-sm text-xs space-y-3 min-h-full">
+                          <div className="text-center border-b border-gray-300 pb-3">
+                            <p className="font-extrabold text-sm">WAY POINT TRAVEL LTD</p>
+                            <p className="text-[10px] text-gray-500">Official Payment Receipt</p>
+                          </div>
+                          <div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                            <span className="break-all"><span className="font-bold">Receipt No:</span> {receiptNumber || "—"}</span>
+                            <span className="flex-shrink-0"><span className="font-bold">Date:</span> {receiptDate}</span>
+                          </div>
+                          <p><span className="font-bold">Received From:</span> {getReceiptName() || "—"}</p>
+                          <p><span className="font-bold">Services:</span> {receiptServices.length > 0 ? receiptServices.join(", ") : "—"}</p>
+                          <p>
+                            <span className="font-bold">Amount:</span>{" "}
+                            {Number(receiptAmount) > 0 ? formatAmount(Number(receiptAmount), getReceiptCurrency() || "NGN") : "—"}
+                          </p>
+                          <p className="italic">
+                            <span className="font-bold not-italic">Amount in Words:</span>{" "}
+                            {Number(receiptAmount) > 0 ? amountToWords(Number(receiptAmount), getReceiptCurrency() || "NGN") : "—"}
+                          </p>
+                          <p><span className="font-bold">Payment Method:</span> {receiptMethod || "—"}</p>
+                          {receiptDescription && <p><span className="font-bold">Description:</span> {receiptDescription}</p>}
+                          {receiptClientEmail && <p><span className="font-bold">Client Email:</span> {receiptClientEmail}</p>}
+                          <div className="pt-8">
+                            <div className="border-t border-gray-400 w-32"></div>
+                            <p className="text-[10px] text-gray-500 mt-1">Authorized Signature</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Payments Table */}
+              <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+                {paymentsLoading ? (
+                  <div className="py-12 flex justify-center items-center">
+                    <div className="h-8 w-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : payments.length === 0 ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-muted-foreground">
+                    <CreditCard className="h-10 w-10 mb-3 opacity-40" />
+                    <p className="text-sm font-semibold">No payments recorded yet</p>
+                    <p className="text-xs mt-1">Click "Record Payment" to log the first invoice/payment.</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
+                        <th className="py-3.5 px-6">Invoice</th>
+                        <th className="py-3.5 px-6">Client</th>
+                        <th className="py-3.5 px-6">Amount</th>
+                        <th className="py-3.5 px-6">Method</th>
+                        <th className="py-3.5 px-6">Receipt</th>
+                        <th className="py-3.5 px-6 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60 text-xs">
+                      {payments.map((p: any) => (
+                        <tr key={p.id} className="hover:bg-muted/10 transition-colors">
+                          <td className="py-3.5 px-6">
+                            <p className="font-mono font-semibold text-foreground">{p.invoiceNumber}</p>
+                            <p className="text-[10px] text-muted-foreground">{p.recordedBy?.name}</p>
+                          </td>
+                          <td className="py-3.5 px-6">
+                            <p className="font-semibold text-foreground">{p.client?.firstName} {p.client?.lastName}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono">{p.client?.fileNumber}</p>
+                          </td>
+                          <td className="py-3.5 px-6 font-semibold text-foreground">{formatAmount(p.amount, p.currency)}</td>
+                          <td className="py-3.5 px-6 text-muted-foreground">{p.method || "—"}</td>
+                          <td className="py-3.5 px-6">
+                            {p.receiptUrl ? (
+                              <a href={p.receiptUrl} download={p.receiptFileName || "receipt"} className="text-primary hover:underline font-semibold text-xs cursor-pointer">
+                                {p.receiptFileName || "Download"}
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-6 text-right">
+                            {user?.role === "ADMIN" && p.status === "PENDING" ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => handleUpdatePaymentStatus(p.id, "CONFIRMED")}
+                                  className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer"
+                                >
+                                  ✓ Confirm
+                                </button>
+                                <button
+                                  onClick={() => handleUpdatePaymentStatus(p.id, "REJECTED")}
+                                  className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer"
+                                >
+                                  ✕ Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                p.status === "CONFIRMED" ? "bg-green-500/10 text-green-600" :
+                                p.status === "REJECTED" ? "bg-red-500/10 text-red-500" :
+                                "bg-yellow-500/10 text-yellow-600"
+                              }`}>
+                                {p.status}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           )}

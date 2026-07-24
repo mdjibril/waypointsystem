@@ -1063,3 +1063,121 @@ Log in via the browser at `http://localhost:3000` as admin (`admin@waypoint.com`
 
 4. **Build verification:**
    - `npm run build` — compiles successfully with no errors.
+
+---
+
+# Phase 7 — Test Plan: Payments And Service Agreement
+
+## Setup
+
+```bash
+npm run dev
+npx prisma generate
+```
+
+Log in via the browser at `http://localhost:3000` as admin (`admin@waypoint.com` / `password123`). Have at least two clients on hand — one assigned to a staff member, one unassigned (or assigned to a different staff member) — to test the recording/permission scope below. If a dashboard/tab shows all-zero metrics right after logging in, refresh the page once — this is a pre-existing dev-mode data-loading quirk affecting all tabs (Clients/Tasks/Documents included), not specific to Payments.
+
+---
+
+## Task 1 — Create payment/invoice database model
+
+### Test Steps
+
+1. **Schema model exists:**
+   - Open `prisma/schema.prisma` — the `Payment` model is present with fields: `id`, `clientId`, `applicationId`, `invoiceNumber`, `amount`, `currency`, `method`, `status`, `notes`, `receiptFileName`, `receiptUrl`, `recordedById`, `confirmedById`, `createdAt`, `updatedAt`.
+   - `Client` and `Application` each have a `payments Payment[]` relation.
+
+2. **API endpoint exists:**
+   - `curl http://localhost:3000/api/payments` returns status 200 with `{ "payments": [] }` (empty initially, unauthenticated).
+
+3. **Database table created:**
+   - Run `npx prisma migrate status` — shows the `add_payment_model` migration applied, database in sync.
+   - Run `npx prisma studio` — the `payments` table appears with the correct columns.
+
+4. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 2 — Build payment entry form and payment status display
+
+### Test Steps
+
+1. **Payments tab is visible to both roles:**
+   - Log in as admin — "Payments" appears in the sidebar.
+   - Log in as staff — "Payments" also appears in the sidebar (previously admin-only).
+
+2. **Record a payment (admin):**
+   - Navigate to Payments, click "Record Payment".
+   - Select a client, enter an amount, leave currency at the default (NGN), pick a payment method, click "Record Payment".
+   - The modal closes and a new row appears in the table with an auto-generated invoice number (`INV-YYYY-NNNN`), the amount formatted as `₦x,xxx.xx`, and a `PENDING` status badge with Confirm/Reject buttons (admin only).
+
+3. **Confirm and reject:**
+   - Click "✓ Confirm" on a pending row — the badge changes to a green `CONFIRMED` badge and the action buttons disappear.
+   - Record another payment and click "✕ Reject" — the badge changes to a red `REJECTED` badge.
+
+4. **Staff cannot confirm/reject:**
+   - Log in as staff — any `PENDING` row shows a static yellow `PENDING` badge instead of Confirm/Reject buttons.
+
+5. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 3 — Add invoice number and receipt upload support
+
+### Test Steps
+
+1. **Invoice numbers are unique and sequential:**
+   - Record several payments — each gets a distinct `INV-YYYY-NNNN`, incrementing regardless of which client it's for.
+
+2. **Receipt upload:**
+   - Open "Record Payment", choose a small file (e.g. a `.jpg` or `.pdf`) under "Receipt Upload" — the "Selected: name (size KB)" line appears.
+   - Submit — the new row's "Receipt" column shows the file name as a clickable download link instead of "—".
+   - Click the link — the file downloads (base64 data URL, same mechanism as Document uploads).
+
+3. **Multi-currency support:**
+   - Record one payment in each of NGN, USD, and GBP — amounts render as `₦`, `$`, `£` respectively.
+   - Record a payment choosing "Other..." for currency, type a custom code (e.g. `EUR`) — the modal reveals a "Custom Currency Code" field; after submitting, the row shows `EUR x.xx` (code prefix, no symbol).
+
+4. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 4 — Show payment summary on client/application profile
+
+### Test Steps
+
+1. **Client profile Payments card:**
+   - Open a client with recorded payments — a "Payments" card appears below the "Tasks" card, listing each invoice number, amount, method, and status badge.
+   - If any payments for this client are `PENDING`, an "Outstanding:" line appears at the bottom showing the pending total(s) — one amount per currency if the client has pending payments in more than one currency.
+   - A client with no payments shows "No payments recorded for this client" instead.
+
+2. **Application detail Payments card:**
+   - Record a payment against a specific application (not just a client).
+   - Open that application's detail page — a "Payments" card appears below "Stage History", scoped only to payments linked to that application (client-level-only payments, with no `applicationId`, do not appear here).
+
+3. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 5 — Add outstanding balance metric to admin dashboard data
+
+### Test Steps
+
+1. **Card appears in the metric grid:**
+   - Dashboard shows a 5th metric card, "Outstanding Balance", with a green wallet icon.
+   - With no pending payments anywhere, it shows "—".
+
+2. **Per-currency grouping:**
+   - With pending payments in two different currencies (e.g. ₦200 and €300 outstanding), the card shows both amounts stacked on separate lines — never summed into one number.
+   - Confirm a pending payment — refresh the dashboard — that currency's line disappears (or its total decreases) since confirmed payments no longer count as outstanding.
+
+3. **Card visible to all roles:**
+   - As admin: reflects the outstanding total across all clients.
+   - Log in as staff: reflects only the outstanding total for clients assigned to that staff member.
+
+4. **Build verification:**
+   - `npm run build` — compiles successfully with no errors.
