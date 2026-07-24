@@ -24,6 +24,8 @@ model User {
   createdTasks    Task[]        @relation("TaskAssignedBy")
   uploadedDocuments Document[]   @relation("DocumentUploader")
   verifiedDocuments Document[]   @relation("DocumentVerifier")
+  recordedPayments  Payment[]    @relation("PaymentRecordedBy")
+  confirmedPayments Payment[]    @relation("PaymentConfirmedBy")
 
   @@map("users")
 }
@@ -106,6 +108,7 @@ model Client {
   applications    Application[]
   tasks           Task[]
   documents       Document[]
+  payments        Payment[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -128,6 +131,7 @@ model Application {
   stageHistory       ApplicationStageHistory[]
   tasks              Task[]
   documents          Document[]
+  payments           Payment[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -169,4 +173,28 @@ model ApplicationStageHistory {
   createdAt     DateTime    @default(now())
 
   @@map("application_stage_history")
+}
+
+model Payment {
+  id              Int          @id @default(autoincrement())
+  clientId        Int
+  client          Client       @relation(fields: [clientId], references: [id])
+  applicationId   Int?
+  application     Application? @relation(fields: [applicationId], references: [id])
+  invoiceNumber   String       @unique
+  amount          Float
+  currency        String
+  method          String?
+  status          String       @default("PENDING")
+  notes           String?
+  receiptFileName String?
+  receiptUrl      String?
+  recordedById    Int
+  recordedBy      User         @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
+  confirmedById   Int?
+  confirmedBy     User?        @relation("PaymentConfirmedBy", fields: [confirmedById], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@map("payments")
 }
