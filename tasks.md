@@ -152,11 +152,11 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| [ ] Create payment/invoice database model | Developer 1 | `feature/payment-model` | Application model |
-| [ ] Build payment entry form and payment status display | Developer 1 | `feature/payment-entry` | Payment model |
-| [ ] Add invoice number and receipt upload support | Developer 1 | `feature/invoice-receipts` | Payment entry |
-| [ ] Show payment summary on client/application profile | Developer 2 | `feature/payment-profile-summary` | Payment entry, client profile |
-| [ ] Add outstanding balance metric to admin dashboard data | Developer 1 | `feature/payment-dashboard-metrics` | Payment entry |
+| [x] Create payment/invoice database model | Developer 1 | `feature/payment-model` | Application model |
+| [x] Build payment entry form and payment status display | Developer 1 | `feature/payment-entry` | Payment model |
+| [x] Add invoice number and receipt upload support | Developer 1 | `feature/invoice-receipts` | Payment entry |
+| [x] Show payment summary on client/application profile | Developer 2 | `feature/payment-profile-summary` | Payment entry, client profile |
+| [x] Add outstanding balance metric to admin dashboard data | Developer 1 | `feature/payment-dashboard-metrics` | Payment entry |
 
 Merge order:
 
