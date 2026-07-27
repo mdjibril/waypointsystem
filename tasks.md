@@ -190,12 +190,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| [ ] Build admin dashboard data queries | Developer 1 | `feature/admin-dashboard-data` | Tasks, workflow, payments |
-| [ ] Build admin dashboard UI with charts and cards | Developer 1 | `feature/admin-dashboard-ui` | Admin dashboard data |
-| [ ] Build staff dashboard data queries | Developer 2 | `feature/staff-dashboard-data` | Tasks, assigned clients |
-| [ ] Build staff dashboard UI | Developer 2 | `feature/staff-dashboard-ui` | Staff dashboard data |
-| [ ] Add reports page for approvals, refusals, revenue, staff workload, and stage duration | Developer 1 | `feature/reports-page` | Admin dashboard data |
-| [ ] Add export filters for reports | Developer 2 | `feature/report-filters` | Reports page |
+| [x] Build admin dashboard data queries | Developer 1 | `feature/admin-dashboard-data` | Tasks, workflow, payments |
+| [x] Build admin dashboard UI with charts and cards | Developer 1 | `feature/admin-dashboard-ui` | Admin dashboard data |
+| [x] Build staff dashboard data queries | Developer 2 | `feature/staff-dashboard-data` | Tasks, assigned clients |
+| [x] Build staff dashboard UI | Developer 2 | `feature/staff-dashboard-ui` | Staff dashboard data |
+| [x] Add reports page for approvals, refusals, revenue, staff workload, and stage duration | Developer 1 | `feature/reports-page` | Admin dashboard data |
+| [x] Add export filters for reports | Developer 2 | `feature/report-filters` | Reports page |
 
 Merge order:
 

@@ -1342,3 +1342,75 @@ Log in as admin (`admin@waypoint.com` / `password123`). Ensure at least one appl
 
 
 ---
+
+# Phase 9 — Test Plan: Dashboards And Reports
+
+## Setup
+
+```bash
+npm run dev
+npx prisma generate
+```
+
+Log in as admin (`admin@waypoint.com` / `password123`). Have a staff user, some tasks, applications at different stages, and confirmed payments for testing charts. If you don't have any, create them first via the UI.
+
+---
+
+## Task 1-4 — Enhanced admin and staff dashboards
+
+### Test Steps
+
+1. **Dashboard header is role-aware:**
+   - As admin: header says "Full platform overview and performance metrics."
+   - Log in as staff: header says "Your assigned clients and tasks at a glance."
+
+2. **Pipeline bar charts:**
+   - Pipeline Overview shows horizontal bar charts for each stage instead of plain counts.
+   - Each bar's width is proportional to the highest stage count.
+   - Count numbers appear to the right of each bar.
+
+3. **Decision Outcomes panel:**
+   - Shows Approved, Refused, and Pending Decision bars with percentages.
+   - Data reflects actual application decision statuses, not hardcoded.
+
+4. **Staff Workload Distribution:**
+   - Shows each staff member with active (non-DONE, non-CANCELLED) task count.
+   - Horizontal bars with name on the left and count on the right.
+   - Shows "No active tasks assigned to staff" when empty.
+
+5. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 5-6 — Reports page with live charts and filters
+
+### Test Steps
+
+1. **Reports tab visible to admin only:**
+   - As admin: "Reports" appears in the sidebar.
+   - Log in as staff: "Reports" tab is hidden.
+
+2. **Visa Approval Rates by Destination:**
+   - Navigate to Reports tab.
+   - Bar chart shows each destination country with vertical bars.
+   - Each bar shows the approval rate as percentage and count (e.g. "88% (7/8)").
+   - Shows "No application data yet" if no apps exist.
+
+3. **Revenue by Service Type:**
+   - Shows confirmed payment revenue grouped by service type.
+   - Horizontal bars with total revenue and payment count.
+   - Shows "No confirmed payments yet" when empty.
+
+4. **Pipeline Bottleneck Analysis:**
+   - Shows all 10 pipeline stages with counts.
+   - Color-coded: red (>5 apps), yellow (2-5), blue (<2).
+   - Helps identify which stages have backlog.
+
+5. **Task Completion by Staff:**
+   - Each staff member shows done/total tasks and percentage.
+   - Completion rate bar fills proportionally.
+   - Shows "No tasks assigned yet" when empty.
+
+6. **Build verification:**
+   - `npm run build` — compiles successfully with no errors.
