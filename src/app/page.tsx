@@ -37,7 +37,8 @@ import {
   Wallet,
   Receipt,
   RefreshCw,
-  Download
+  Download,
+  Send
 } from "lucide-react";
 import {
   DndContext,
@@ -247,6 +248,18 @@ export default function Home() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewRequestLoading, setReviewRequestLoading] = useState(false);
   const [reviewDecisionLoading, setReviewDecisionLoading] = useState<number | null>(null);
+
+  // Submission & Tracking State
+  const [submission, setSubmission] = useState<any>(null);
+  const [trackingUpdates, setTrackingUpdates] = useState<any[]>([]);
+  const [isSubmissionOpen, setIsSubmissionOpen] = useState(false);
+  const [submissionForm, setSubmissionForm] = useState({ referenceNumber: "", submittedAt: "", biometricsAt: "", portal: "", notes: "" });
+  const [submissionSaving, setSubmissionSaving] = useState(false);
+  const [newTrackingStatus, setNewTrackingStatus] = useState("");
+  const [newTrackingMessage, setNewTrackingMessage] = useState("");
+  const [newTrackingUrl, setNewTrackingUrl] = useState("");
+  const [addTrackingLoading, setAddTrackingLoading] = useState(false);
+  const [submissionAppId, setSubmissionAppId] = useState<number | null>(null);
 
   // Task Management State
   const [tasks, setTasks] = useState<any[]>([]);
@@ -515,6 +528,8 @@ export default function Home() {
         setSelectedApplication(data.application);
         fetchStageHistory(applicationId);
         fetchQualityReviews(applicationId);
+        fetchSubmission(applicationId);
+        fetchTrackingUpdates(applicationId);
       }
     } catch (err) {
       console.error("Failed to load application:", err);
@@ -597,6 +612,83 @@ export default function Home() {
       console.error("Failed to decide review:", err);
     } finally {
       setReviewDecisionLoading(null);
+    }
+  };
+
+  const fetchSubmission = async (applicationId: number) => {
+    try {
+      const res = await fetch(`/api/submissions?applicationId=${applicationId}`);
+      const data = await res.json();
+      if (res.ok) setSubmission(data.submission);
+    } catch (err) {
+      console.error("Failed to load submission:", err);
+    }
+  };
+
+  const fetchTrackingUpdates = async (applicationId: number) => {
+    try {
+      const res = await fetch(`/api/tracking?applicationId=${applicationId}`);
+      const data = await res.json();
+      if (res.ok) setTrackingUpdates(data.updates);
+    } catch (err) {
+      console.error("Failed to load tracking:", err);
+    }
+  };
+
+  const handleSaveSubmission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmissionSaving(true);
+    try {
+      const res = await fetch("/api/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicationId: submissionAppId,
+          referenceNumber: submissionForm.referenceNumber || undefined,
+          submittedAt: submissionForm.submittedAt || undefined,
+          biometricsAt: submissionForm.biometricsAt || undefined,
+          portal: submissionForm.portal || undefined,
+          notes: submissionForm.notes || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSubmission(data.submission);
+        setIsSubmissionOpen(false);
+        setSubmissionAppId(null);
+      }
+    } catch (err) {
+      console.error("Failed to save submission:", err);
+    } finally {
+      setSubmissionSaving(false);
+    }
+  };
+
+  const handleAddTracking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddTrackingLoading(true);
+    try {
+      const res = await fetch("/api/tracking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicationId: selectedApplication.id,
+          status: newTrackingStatus,
+          message: newTrackingMessage || undefined,
+          referenceUrl: newTrackingUrl || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTrackingUpdates([data.update, ...trackingUpdates]);
+        setNewTrackingStatus("");
+        setNewTrackingMessage("");
+        setNewTrackingUrl("");
+      }
+    } catch (err) {
+      console.error("Failed to add tracking:", err);
+    } finally {
+      setAddTrackingLoading(false);
     }
   };
 
@@ -2389,6 +2481,122 @@ export default function Home() {
                             </button>
                           </div>
                         )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Submission Details */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Send className="h-4 w-4 text-primary" /> Submission Details
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setSubmissionAppId(selectedApplication.id);
+                      setSubmissionForm(submission ? {
+                        referenceNumber: submission.referenceNumber || "",
+                        submittedAt: submission.submittedAt ? new Date(submission.submittedAt).toISOString().slice(0, 16) : "",
+                        biometricsAt: submission.biometricsAt ? new Date(submission.biometricsAt).toISOString().slice(0, 16) : "",
+                        portal: submission.portal || "",
+                        notes: submission.notes || "",
+                      } : { referenceNumber: "", submittedAt: "", biometricsAt: "", portal: "", notes: "" });
+                      setIsSubmissionOpen(true);
+                    }}
+                    className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer"
+                  >
+                    {submission ? "Edit" : "Record"} Submission
+                  </button>
+                </div>
+                {submission ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-muted/20 rounded-xl">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Reference Number</p>
+                      <p className="text-xs font-semibold text-foreground font-mono">{submission.referenceNumber || "—"}</p>
+                    </div>
+                    <div className="p-3 bg-muted/20 rounded-xl">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Submission Date</p>
+                      <p className="text-xs font-semibold text-foreground">{submission.submittedAt ? new Date(submission.submittedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</p>
+                    </div>
+                    <div className="p-3 bg-muted/20 rounded-xl">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Biometrics Date</p>
+                      <p className="text-xs font-semibold text-foreground">{submission.biometricsAt ? new Date(submission.biometricsAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</p>
+                    </div>
+                    <div className="p-3 bg-muted/20 rounded-xl">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Portal</p>
+                      <p className="text-xs font-semibold text-foreground">{submission.portal || "—"}</p>
+                    </div>
+                    {submission.notes && (
+                      <div className="p-3 bg-muted/20 rounded-xl col-span-2">
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Notes</p>
+                        <p className="text-xs text-foreground">{submission.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground py-4 text-center">No submission details recorded yet</p>
+                )}
+              </div>
+
+              {/* Tracking Updates */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-primary" /> Application Tracking
+                </h4>
+                <form onSubmit={handleAddTracking} className="flex flex-wrap gap-2 mb-4">
+                  <select
+                    required
+                    value={newTrackingStatus}
+                    onChange={(e) => setNewTrackingStatus(e.target.value)}
+                    className="bg-muted/20 border border-border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+                  >
+                    <option value="">Add status...</option>
+                    <option value="SUBMITTED">Submitted</option>
+                    <option value="UNDER_REVIEW">Under Review</option>
+                    <option value="ADDITIONAL_INFO_REQUESTED">Info Requested</option>
+                    <option value="DECISION_MADE">Decision Made</option>
+                    <option value="PASSPORT_READY">Passport Ready</option>
+                    <option value="COMPLETED">Completed</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={newTrackingMessage}
+                    onChange={(e) => setNewTrackingMessage(e.target.value)}
+                    placeholder="Optional note..."
+                    className="flex-1 min-w-[180px] bg-muted/20 border border-border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+                  />
+                  <button
+                    type="submit"
+                    disabled={addTrackingLoading}
+                    className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer disabled:opacity-50"
+                  >
+                    {addTrackingLoading ? "..." : "Add"}
+                  </button>
+                </form>
+                {trackingUpdates.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center">No tracking updates yet</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {trackingUpdates.map((u: any) => (
+                      <div key={u.id} className="flex items-start gap-3 p-3 bg-muted/20 rounded-xl">
+                        <div className={`h-2 w-2 rounded-full mt-1.5 flex-shrink-0 ${
+                          u.status === "COMPLETED" ? "bg-green-500" :
+                          u.status === "DECISION_MADE" ? "bg-blue-500" :
+                          u.status === "ADDITIONAL_INFO_REQUESTED" ? "bg-orange-500" :
+                          "bg-primary"
+                        }`}></div>
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-foreground">{u.status.replace(/_/g, " ")}</p>
+                          {u.message && <p className="text-[10px] text-muted-foreground">{u.message}</p>}
+                          {u.referenceUrl && (
+                            <a href={u.referenceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary hover:underline block mt-0.5">View Reference</a>
+                          )}
+                          <p className="text-[9px] text-muted-foreground mt-1">
+                            {u.updatedBy?.name} · {new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -4525,6 +4733,55 @@ export default function Home() {
                     <div className="w-9 h-5 bg-muted rounded-full relative cursor-pointer"><span className="absolute left-0.5 top-0.5 bg-card w-4 h-4 rounded-full"></span></div>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Submission Details Modal */}
+          {isSubmissionOpen && (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+              <div className="bg-card border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
+                  <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                    <Send className="h-4 w-4 text-primary" /> Submission Details
+                  </h4>
+                  <button onClick={() => { setIsSubmissionOpen(false); setSubmissionAppId(null); }} className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer">Cancel</button>
+                </div>
+                <form onSubmit={handleSaveSubmission} className="p-6 space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase">Reference Number</label>
+                    <input type="text" value={submissionForm.referenceNumber} onChange={(e) => setSubmissionForm({ ...submissionForm, referenceNumber: e.target.value })} placeholder="e.g. GWF123456789" className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-muted-foreground uppercase">Submission Date</label>
+                      <input type="datetime-local" value={submissionForm.submittedAt} onChange={(e) => setSubmissionForm({ ...submissionForm, submittedAt: e.target.value })} className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-muted-foreground uppercase">Biometrics Date</label>
+                      <input type="datetime-local" value={submissionForm.biometricsAt} onChange={(e) => setSubmissionForm({ ...submissionForm, biometricsAt: e.target.value })} className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase">Portal</label>
+                    <select value={submissionForm.portal} onChange={(e) => setSubmissionForm({ ...submissionForm, portal: e.target.value })} className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground">
+                      <option value="">Select portal...</option>
+                      <option value="VFS Global">VFS Global</option>
+                      <option value="TLScontact">TLScontact</option>
+                      <option value="UKVI">UKVI</option>
+                      <option value="IRCC">IRCC</option>
+                      <option value="USCIS">USCIS</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase">Notes</label>
+                    <input type="text" value={submissionForm.notes} onChange={(e) => setSubmissionForm({ ...submissionForm, notes: e.target.value })} placeholder="Any submission notes..." className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground" />
+                  </div>
+                  <button type="submit" disabled={submissionSaving} className="w-full bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center justify-center gap-2 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50">
+                    {submissionSaving ? <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> : "Save Submission"}
+                  </button>
+                </form>
               </div>
             </div>
           )}
