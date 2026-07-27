@@ -26,6 +26,7 @@ model User {
   verifiedDocuments Document[]   @relation("DocumentVerifier")
   recordedPayments  Payment[]    @relation("PaymentRecordedBy")
   confirmedPayments Payment[]    @relation("PaymentConfirmedBy")
+  qualityReviews    QualityReview[] @relation("QualityReviewer")
 
   @@map("users")
 }
@@ -132,6 +133,7 @@ model Application {
   tasks              Task[]
   documents          Document[]
   payments           Payment[]
+  qualityReviews     QualityReview[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -197,4 +199,21 @@ model Payment {
   updatedAt       DateTime     @updatedAt
 
   @@map("payments")
+}
+
+model QualityReview {
+  id            Int          @id @default(autoincrement())
+  applicationId Int
+  application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  reviewerId    Int
+  reviewer      User         @relation("QualityReviewer", fields: [reviewerId], references: [id])
+  status        String       @default("PENDING")
+  decision      String?
+  notes         String?
+  documentIds   Int[]
+  decidedAt     DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@map("quality_reviews")
 }
