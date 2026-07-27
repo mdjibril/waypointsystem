@@ -2,18 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 
+// GET /api/quality-reviews - List reviews
 export async function GET() {
   try {
     const currentUser = await getCurrentUserFromCookies();
 
-    if (!currentUser) {
-      return NextResponse.json({ reviews: [] });
-    }
-
     const where: any = {};
-    if (currentUser.role !== "ADMIN") {
+    if (!currentUser || currentUser.role !== "ADMIN") {
       where.application = {
-        assignedStaffId: currentUser.id,
+        assignedStaffId: currentUser?.id || 0,
       };
     }
 
@@ -25,28 +22,25 @@ export async function GET() {
           select: {
             id: true,
             serviceType: true,
-            destinationCountry: true,
             currentStage: true,
-            clientId: true,
             client: { select: { id: true, firstName: true, lastName: true, fileNumber: true } },
           },
         },
-        reviewer: { select: { id: true, name: true, email: true } },
+        reviewer: { select: { id: true, name: true } },
       },
     });
 
     return NextResponse.json({ reviews });
   } catch (error: any) {
-    console.error("Fetch reviews error:", error);
     return NextResponse.json({ error: "Failed to fetch reviews" }, { status: 500 });
   }
 }
 
+// POST /api/quality-reviews - Request a review
 export async function POST(request: Request) {
   try {
     const currentUser = await getCurrentUserFromCookies();
-
-    if (!currentUser || (currentUser.role !== "ADMIN" && currentUser.role !== "STAFF")) {
+    if (!currentUser) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
@@ -58,7 +52,7 @@ export async function POST(request: Request) {
 
     const application = await prisma.application.findUnique({
       where: { id: Number(applicationId) },
-      include: { documents: true },
+      include: { documents: { where: { status: { not: "REJECTED" } } } },
     });
 
     if (!application) {
@@ -77,29 +71,26 @@ export async function POST(request: Request) {
           select: {
             id: true,
             serviceType: true,
-            destinationCountry: true,
             currentStage: true,
-            clientId: true,
             client: { select: { id: true, firstName: true, lastName: true, fileNumber: true } },
           },
         },
-        reviewer: { select: { id: true, name: true, email: true } },
+        reviewer: { select: { id: true, name: true } },
       },
     });
 
     return NextResponse.json({ review }, { status: 201 });
   } catch (error: any) {
-    console.error("Create review error:", error);
     return NextResponse.json({ error: "Failed to create review" }, { status: 500 });
   }
 }
 
+// PATCH /api/quality-reviews - Approve / Reject / Request Corrections
 export async function PATCH(request: Request) {
   try {
     const currentUser = await getCurrentUserFromCookies();
-
     if (!currentUser || currentUser.role !== "ADMIN") {
-      return NextResponse.json({ error: "Only administrators can decide reviews" }, { status: 403 });
+      return NextResponse.json({ error: "Only admins can decide reviews" }, { status: 403 });
     }
 
     const { id, decision, notes } = await request.json();
@@ -115,9 +106,9 @@ export async function PATCH(request: Request) {
     const review = await prisma.qualityReview.update({
       where: { id: Number(id) },
       data: {
+        status: "COMPLETED",
         decision,
-        status: decision === "CORRECTIONS_REQUESTED" ? "PENDING" : "COMPLETED",
-        notes: notes !== undefined ? notes : undefined,
+        notes: notes || undefined,
         decidedAt: new Date(),
       },
       include: {
@@ -125,19 +116,24 @@ export async function PATCH(request: Request) {
           select: {
             id: true,
             serviceType: true,
-            destinationCountry: true,
             currentStage: true,
-            clientId: true,
             client: { select: { id: true, firstName: true, lastName: true, fileNumber: true } },
           },
         },
-        reviewer: { select: { id: true, name: true, email: true } },
+        reviewer: { select: { id: true, name: true } },
       },
     });
 
+    // If approved, mark application as ready for submission
+    if (decision === "APPROVED") {
+      await prisma.application.update({
+        where: { id: review.applicationId },
+        data: { currentStage: "QUALITY_REVIEW" },
+      });
+    }
+
     return NextResponse.json({ review });
   } catch (error: any) {
-    console.error("Update review error:", error);
     return NextResponse.json({ error: "Failed to update review" }, { status: 500 });
   }
 }
