@@ -27,6 +27,8 @@ model User {
   recordedPayments  Payment[]    @relation("PaymentRecordedBy")
   confirmedPayments Payment[]    @relation("PaymentConfirmedBy")
   qualityReviews    QualityReview[] @relation("QualityReviewer")
+  submissions       SubmissionRecord[] @relation("SubmissionRecorder")
+  trackingUpdates   TrackingUpdate[] @relation("TrackingUpdater")
 
   @@map("users")
 }
@@ -134,6 +136,8 @@ model Application {
   documents          Document[]
   payments           Payment[]
   qualityReviews     QualityReview[]
+  submissionRecord   SubmissionRecord?
+  trackingUpdates    TrackingUpdate[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -216,4 +220,35 @@ model QualityReview {
   updatedAt     DateTime     @updatedAt
 
   @@map("quality_reviews")
+}
+
+model SubmissionRecord {
+  id            Int         @id @default(autoincrement())
+  applicationId Int         @unique
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  referenceNumber String?
+  submittedAt   DateTime?
+  biometricsAt  DateTime?
+  portal        String?
+  notes         String?
+  submittedById Int
+  submittedBy   User        @relation("SubmissionRecorder", fields: [submittedById], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("submission_records")
+}
+
+model TrackingUpdate {
+  id            Int         @id @default(autoincrement())
+  applicationId Int
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  status        String
+  message       String?
+  referenceUrl  String?
+  updatedById   Int
+  updatedBy     User        @relation("TrackingUpdater", fields: [updatedById], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@map("tracking_updates")
 }
