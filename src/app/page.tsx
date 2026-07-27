@@ -4452,48 +4452,139 @@ export default function Home() {
             <div className="space-y-6 animate-in fade-in duration-200">
               <div>
                 <h3 className="text-lg font-bold text-foreground">Business Analytics Reports</h3>
-                <p className="text-xs text-muted-foreground">Observe staff workload metrics, stage bottlenecks, and approvals success.</p>
+                <p className="text-xs text-muted-foreground">Approval rates, stage bottlenecks, revenue, and staff performance.</p>
               </div>
 
+              {/* Approval Rates + Revenue */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <h4 className="font-bold text-xs text-foreground mb-4">Visa Approval Rates By Destination</h4>
-                  <div className="h-48 border border-border rounded-xl bg-muted/20 flex items-end justify-between p-4 gap-2">
-                    {[
-                      { country: "UK", rate: 88, h: "h-[88%]" },
-                      { country: "Canada", rate: 72, h: "h-[72%]" },
-                      { country: "Schengen", rate: 94, h: "h-[94%]" },
-                      { country: "USA", rate: 64, h: "h-[64%]" }
-                    ].map((item, i) => (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                        <div className={`w-full bg-primary/80 hover:bg-primary rounded-t-lg transition-all ${item.h}`}></div>
-                        <span className="text-[10px] font-bold text-foreground">{item.country}</span>
-                        <span className="text-[9px] text-muted-foreground">{item.rate}%</span>
+                  {(() => {
+                    const destMap: Record<string, { total: number; approved: number }> = {};
+                    applications.forEach((a: any) => {
+                      if (a.destinationCountry) {
+                        if (!destMap[a.destinationCountry]) destMap[a.destinationCountry] = { total: 0, approved: 0 };
+                        destMap[a.destinationCountry].total++;
+                        if (a.decisionStatus === "APPROVED") destMap[a.destinationCountry].approved++;
+                      }
+                    });
+                    const entries = Object.entries(destMap).sort((a, b) => b[1].total - a[1].total).slice(0, 6);
+                    return entries.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-12 text-center">No application data yet</p>
+                    ) : (
+                      <div className="h-48 flex items-end justify-between p-4 gap-2 bg-muted/5 rounded-xl">
+                        {entries.map(([country, stats], i) => {
+                          const rate = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
+                          return (
+                            <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                              <div className="w-full bg-primary/80 hover:bg-primary rounded-t-lg transition-all" style={{ height: `${Math.max(rate, 10)}%` }}></div>
+                              <span className="text-[10px] font-bold text-foreground">{country}</span>
+                              <span className="text-[9px] text-muted-foreground">{rate}% ({stats.approved}/{stats.total})</span>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                  <h4 className="font-bold text-xs text-foreground mb-4">Pipeline Distribution by Stage</h4>
-                  <div className="space-y-3">
-                    {[
-                      { stage: "Consultation Eligibility Check", count: 24, percent: "w-[40%]" },
-                      { stage: "Document Collection", count: 32, percent: "w-[54%]" },
-                      { stage: "Quality Reviews", count: 12, percent: "w-[20%]" },
-                      { stage: "Embassy Submissions", count: 18, percent: "w-[30%]" }
-                    ].map((item, i) => (
-                      <div key={i} className="space-y-1">
-                        <div className="flex justify-between text-[10px] font-bold">
-                          <span className="text-foreground">{item.stage}</span>
-                          <span className="text-muted-foreground">{item.count} files</span>
-                        </div>
-                        <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                          <div className={`h-full bg-primary rounded-full ${item.percent}`}></div>
-                        </div>
+                  <h4 className="font-bold text-xs text-foreground mb-4">Revenue by Service Type</h4>
+                  {(() => {
+                    const svcMap: Record<string, { count: number; revenue: number }> = {};
+                    payments.filter((p: any) => p.status === "CONFIRMED").forEach((p: any) => {
+                      const svc = (p.application?.serviceType || p.client?.applications?.[0]?.serviceType || "Unknown");
+                      if (!svcMap[svc]) svcMap[svc] = { count: 0, revenue: 0 };
+                      svcMap[svc].count++;
+                      svcMap[svc].revenue += p.amount || 0;
+                    });
+                    const entries = Object.entries(svcMap).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 5);
+                    const maxR = Math.max(...entries.map(e => e[1].revenue), 1);
+                    return entries.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-12 text-center">No confirmed payments yet</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {entries.map(([svc, stats], i) => (
+                          <div key={i} className="space-y-1">
+                            <div className="flex justify-between text-[10px] font-bold">
+                              <span className="text-foreground">{svc}</span>
+                              <span className="text-muted-foreground">₦{stats.revenue.toLocaleString()} ({stats.count} payments)</span>
+                            </div>
+                            <div className="h-2.5 w-full bg-muted/30 rounded-full overflow-hidden">
+                              <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.round((stats.revenue / maxR) * 100)}%` }}></div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Pipeline Bottleneck + Stage Duration */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <h4 className="font-bold text-xs text-foreground mb-4">Pipeline Bottleneck Analysis</h4>
+                  {(() => {
+                    const stageCounts: Record<string, number> = {};
+                    applications.forEach((a: any) => {
+                      stageCounts[a.currentStage] = (stageCounts[a.currentStage] || 0) + 1;
+                    });
+                    const entries = STAGE_ORDER.slice(0, 10).map(s => [s, stageCounts[s] || 0] as const);
+                    const maxC = Math.max(...entries.map(e => e[1]), 1);
+                    return entries.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-12 text-center">No applications in pipeline</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {entries.map(([stage, count]) => (
+                          <div key={stage} className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold text-foreground w-36 truncate flex-shrink-0">{STAGE_LABELS[stage]}</span>
+                            <div className="flex-1 h-4 bg-muted/30 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-500 ${
+                                count > 5 ? "bg-red-500/60" : count > 2 ? "bg-yellow-500/60" : "bg-primary/60"
+                              }`} style={{ width: `${Math.round((count / maxC) * 100)}%` }}></div>
+                            </div>
+                            <span className="text-[10px] font-bold text-muted-foreground w-5 text-right">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <h4 className="font-bold text-xs text-foreground mb-4">Task Completion by Staff</h4>
+                  {(() => {
+                    const taskMap: Record<string, { total: number; done: number }> = {};
+                    tasks.forEach((t: any) => {
+                      if (t.assignee) {
+                        if (!taskMap[t.assignee.name]) taskMap[t.assignee.name] = { total: 0, done: 0 };
+                        taskMap[t.assignee.name].total++;
+                        if (t.status === "DONE") taskMap[t.assignee.name].done++;
+                      }
+                    });
+                    const entries = Object.entries(taskMap).sort((a, b) => b[1].total - a[1].total);
+                    return entries.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-12 text-center">No tasks assigned yet</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {entries.map(([name, stats], i) => {
+                          const rate = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+                          return (
+                            <div key={i} className="space-y-1">
+                              <div className="flex justify-between text-[10px] font-bold">
+                                <span className="text-foreground">{name}</span>
+                                <span className="text-muted-foreground">{stats.done}/{stats.total} ({rate}%)</span>
+                              </div>
+                              <div className="h-2.5 w-full bg-muted/30 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${rate}%` }}></div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
