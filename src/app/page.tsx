@@ -3023,6 +3023,13 @@ export default function Home() {
                     placeholder="Optional note..."
                     className="flex-1 min-w-[180px] bg-muted/20 border border-border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
                   />
+                  <input
+                    type="url"
+                    value={newTrackingUrl}
+                    onChange={(e) => setNewTrackingUrl(e.target.value)}
+                    placeholder="Reference URL (optional)..."
+                    className="flex-1 min-w-[150px] bg-muted/20 border border-border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+                  />
                   <button
                     type="submit"
                     disabled={addTrackingLoading}
