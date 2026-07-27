@@ -2414,194 +2414,6 @@ export default function Home() {
                   </>
                 )}
               </div>
-
-              {/* Quality Review */}
-              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-primary" /> Quality Review
-                  </h4>
-                  <button
-                    onClick={() => {
-                      setNewReviewApplicationId(selectedApplication.id);
-                      setNewReviewNotes("");
-                      setReviewError(null);
-                      setIsRequestReviewOpen(true);
-                    }}
-                    className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer"
-                  >
-                    Request Review
-                  </button>
-                </div>
-                {qualityReviewsLoading ? (
-                  <div className="py-8 flex justify-center"><div className="h-6 w-6 border-3 border-primary border-t-transparent rounded-full animate-spin"></div></div>
-                ) : qualityReviews.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No quality reviews requested yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {qualityReviews.map((r: any) => (
-                      <div key={r.id} className="flex items-start justify-between p-3 rounded-xl border border-border/60 bg-muted/10">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                              r.decision === "APPROVED" ? "bg-green-500/10 text-green-600" :
-                              r.decision === "REJECTED" ? "bg-red-500/10 text-red-500" :
-                              r.decision === "CORRECTIONS_REQUESTED" ? "bg-orange-500/10 text-orange-600" :
-                              "bg-yellow-500/10 text-yellow-600"
-                            }`}>
-                              {r.decision || "PENDING"}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">{r.reviewer?.name}</span>
-                          </div>
-                          {r.notes && <p className="text-xs text-foreground">{r.notes}</p>}
-                          <p className="text-[9px] text-muted-foreground mt-1">{new Date(r.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
-                        </div>
-                        {user?.role === "ADMIN" && !r.decision && (
-                          <div className="flex items-center gap-1 ml-4 flex-shrink-0">
-                            <button
-                              disabled={reviewDecisionLoading === r.id}
-                              onClick={() => handleDecideReview(r.id, "APPROVED")}
-                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer disabled:opacity-50"
-                            >
-                              ✓ Approve
-                            </button>
-                            <button
-                              disabled={reviewDecisionLoading === r.id}
-                              onClick={() => handleDecideReview(r.id, "CORRECTIONS_REQUESTED")}
-                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 cursor-pointer disabled:opacity-50"
-                            >
-                              Request Fixes
-                            </button>
-                            <button
-                              disabled={reviewDecisionLoading === r.id}
-                              onClick={() => handleDecideReview(r.id, "REJECTED")}
-                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer disabled:opacity-50"
-                            >
-                              ✕ Reject
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Submission Details */}
-              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                    <Send className="h-4 w-4 text-primary" /> Submission Details
-                  </h4>
-                  <button
-                    onClick={() => {
-                      setSubmissionAppId(selectedApplication.id);
-                      setSubmissionForm(submission ? {
-                        referenceNumber: submission.referenceNumber || "",
-                        submittedAt: submission.submittedAt ? new Date(submission.submittedAt).toISOString().slice(0, 16) : "",
-                        biometricsAt: submission.biometricsAt ? new Date(submission.biometricsAt).toISOString().slice(0, 16) : "",
-                        portal: submission.portal || "",
-                        notes: submission.notes || "",
-                      } : { referenceNumber: "", submittedAt: "", biometricsAt: "", portal: "", notes: "" });
-                      setIsSubmissionOpen(true);
-                    }}
-                    className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer"
-                  >
-                    {submission ? "Edit" : "Record"} Submission
-                  </button>
-                </div>
-                {submission ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-muted/20 rounded-xl">
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Reference Number</p>
-                      <p className="text-xs font-semibold text-foreground font-mono">{submission.referenceNumber || "—"}</p>
-                    </div>
-                    <div className="p-3 bg-muted/20 rounded-xl">
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Submission Date</p>
-                      <p className="text-xs font-semibold text-foreground">{submission.submittedAt ? new Date(submission.submittedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</p>
-                    </div>
-                    <div className="p-3 bg-muted/20 rounded-xl">
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Biometrics Date</p>
-                      <p className="text-xs font-semibold text-foreground">{submission.biometricsAt ? new Date(submission.biometricsAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</p>
-                    </div>
-                    <div className="p-3 bg-muted/20 rounded-xl">
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Portal</p>
-                      <p className="text-xs font-semibold text-foreground">{submission.portal || "—"}</p>
-                    </div>
-                    {submission.notes && (
-                      <div className="p-3 bg-muted/20 rounded-xl col-span-2">
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Notes</p>
-                        <p className="text-xs text-foreground">{submission.notes}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No submission details recorded yet</p>
-                )}
-              </div>
-
-              {/* Tracking Updates */}
-              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
-                  <RefreshCw className="h-4 w-4 text-primary" /> Application Tracking
-                </h4>
-                <form onSubmit={handleAddTracking} className="flex flex-wrap gap-2 mb-4">
-                  <select
-                    required
-                    value={newTrackingStatus}
-                    onChange={(e) => setNewTrackingStatus(e.target.value)}
-                    className="bg-muted/20 border border-border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
-                  >
-                    <option value="">Add status...</option>
-                    <option value="SUBMITTED">Submitted</option>
-                    <option value="UNDER_REVIEW">Under Review</option>
-                    <option value="ADDITIONAL_INFO_REQUESTED">Info Requested</option>
-                    <option value="DECISION_MADE">Decision Made</option>
-                    <option value="PASSPORT_READY">Passport Ready</option>
-                    <option value="COMPLETED">Completed</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={newTrackingMessage}
-                    onChange={(e) => setNewTrackingMessage(e.target.value)}
-                    placeholder="Optional note..."
-                    className="flex-1 min-w-[180px] bg-muted/20 border border-border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
-                  />
-                  <button
-                    type="submit"
-                    disabled={addTrackingLoading}
-                    className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer disabled:opacity-50"
-                  >
-                    {addTrackingLoading ? "..." : "Add"}
-                  </button>
-                </form>
-                {trackingUpdates.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No tracking updates yet</p>
-                ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {trackingUpdates.map((u: any) => (
-                      <div key={u.id} className="flex items-start gap-3 p-3 bg-muted/20 rounded-xl">
-                        <div className={`h-2 w-2 rounded-full mt-1.5 flex-shrink-0 ${
-                          u.status === "COMPLETED" ? "bg-green-500" :
-                          u.status === "DECISION_MADE" ? "bg-blue-500" :
-                          u.status === "ADDITIONAL_INFO_REQUESTED" ? "bg-orange-500" :
-                          "bg-primary"
-                        }`}></div>
-                        <div className="flex-1">
-                          <p className="text-xs font-semibold text-foreground">{u.status.replace(/_/g, " ")}</p>
-                          {u.message && <p className="text-[10px] text-muted-foreground">{u.message}</p>}
-                          {u.referenceUrl && (
-                            <a href={u.referenceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary hover:underline block mt-0.5">View Reference</a>
-                          )}
-                          <p className="text-[9px] text-muted-foreground mt-1">
-                            {u.updatedBy?.name} · {new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           ) : null}
 
@@ -3035,6 +2847,194 @@ export default function Home() {
                       </div>
                     )}
                   </>
+                )}
+              </div>
+
+              {/* Quality Review */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-primary" /> Quality Review
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setNewReviewApplicationId(selectedApplication.id);
+                      setNewReviewNotes("");
+                      setReviewError(null);
+                      setIsRequestReviewOpen(true);
+                    }}
+                    className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer"
+                  >
+                    Request Review
+                  </button>
+                </div>
+                {qualityReviewsLoading ? (
+                  <div className="py-8 flex justify-center"><div className="h-6 w-6 border-3 border-primary border-t-transparent rounded-full animate-spin"></div></div>
+                ) : qualityReviews.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center">No quality reviews requested yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {qualityReviews.map((r: any) => (
+                      <div key={r.id} className="flex items-start justify-between p-3 rounded-xl border border-border/60 bg-muted/10">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                              r.decision === "APPROVED" ? "bg-green-500/10 text-green-600" :
+                              r.decision === "REJECTED" ? "bg-red-500/10 text-red-500" :
+                              r.decision === "CORRECTIONS_REQUESTED" ? "bg-orange-500/10 text-orange-600" :
+                              "bg-yellow-500/10 text-yellow-600"
+                            }`}>
+                              {r.decision || "PENDING"}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">{r.reviewer?.name}</span>
+                          </div>
+                          {r.notes && <p className="text-xs text-foreground">{r.notes}</p>}
+                          <p className="text-[9px] text-muted-foreground mt-1">{new Date(r.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
+                        </div>
+                        {user?.role === "ADMIN" && !r.decision && (
+                          <div className="flex items-center gap-1 ml-4 flex-shrink-0">
+                            <button
+                              disabled={reviewDecisionLoading === r.id}
+                              onClick={() => handleDecideReview(r.id, "APPROVED")}
+                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer disabled:opacity-50"
+                            >
+                              ✓ Approve
+                            </button>
+                            <button
+                              disabled={reviewDecisionLoading === r.id}
+                              onClick={() => handleDecideReview(r.id, "CORRECTIONS_REQUESTED")}
+                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 cursor-pointer disabled:opacity-50"
+                            >
+                              Request Fixes
+                            </button>
+                            <button
+                              disabled={reviewDecisionLoading === r.id}
+                              onClick={() => handleDecideReview(r.id, "REJECTED")}
+                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer disabled:opacity-50"
+                            >
+                              ✕ Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Submission Details */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Send className="h-4 w-4 text-primary" /> Submission Details
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setSubmissionAppId(selectedApplication.id);
+                      setSubmissionForm(submission ? {
+                        referenceNumber: submission.referenceNumber || "",
+                        submittedAt: submission.submittedAt ? new Date(submission.submittedAt).toISOString().slice(0, 16) : "",
+                        biometricsAt: submission.biometricsAt ? new Date(submission.biometricsAt).toISOString().slice(0, 16) : "",
+                        portal: submission.portal || "",
+                        notes: submission.notes || "",
+                      } : { referenceNumber: "", submittedAt: "", biometricsAt: "", portal: "", notes: "" });
+                      setIsSubmissionOpen(true);
+                    }}
+                    className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer"
+                  >
+                    {submission ? "Edit" : "Record"} Submission
+                  </button>
+                </div>
+                {submission ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-muted/20 rounded-xl">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Reference Number</p>
+                      <p className="text-xs font-semibold text-foreground font-mono">{submission.referenceNumber || "—"}</p>
+                    </div>
+                    <div className="p-3 bg-muted/20 rounded-xl">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Submission Date</p>
+                      <p className="text-xs font-semibold text-foreground">{submission.submittedAt ? new Date(submission.submittedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</p>
+                    </div>
+                    <div className="p-3 bg-muted/20 rounded-xl">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Biometrics Date</p>
+                      <p className="text-xs font-semibold text-foreground">{submission.biometricsAt ? new Date(submission.biometricsAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</p>
+                    </div>
+                    <div className="p-3 bg-muted/20 rounded-xl">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Portal</p>
+                      <p className="text-xs font-semibold text-foreground">{submission.portal || "—"}</p>
+                    </div>
+                    {submission.notes && (
+                      <div className="p-3 bg-muted/20 rounded-xl col-span-2">
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Notes</p>
+                        <p className="text-xs text-foreground">{submission.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground py-4 text-center">No submission details recorded yet</p>
+                )}
+              </div>
+
+              {/* Tracking Updates */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-primary" /> Application Tracking
+                </h4>
+                <form onSubmit={handleAddTracking} className="flex flex-wrap gap-2 mb-4">
+                  <select
+                    required
+                    value={newTrackingStatus}
+                    onChange={(e) => setNewTrackingStatus(e.target.value)}
+                    className="bg-muted/20 border border-border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+                  >
+                    <option value="">Add status...</option>
+                    <option value="SUBMITTED">Submitted</option>
+                    <option value="UNDER_REVIEW">Under Review</option>
+                    <option value="ADDITIONAL_INFO_REQUESTED">Info Requested</option>
+                    <option value="DECISION_MADE">Decision Made</option>
+                    <option value="PASSPORT_READY">Passport Ready</option>
+                    <option value="COMPLETED">Completed</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={newTrackingMessage}
+                    onChange={(e) => setNewTrackingMessage(e.target.value)}
+                    placeholder="Optional note..."
+                    className="flex-1 min-w-[180px] bg-muted/20 border border-border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+                  />
+                  <button
+                    type="submit"
+                    disabled={addTrackingLoading}
+                    className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer disabled:opacity-50"
+                  >
+                    {addTrackingLoading ? "..." : "Add"}
+                  </button>
+                </form>
+                {trackingUpdates.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center">No tracking updates yet</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {trackingUpdates.map((u: any) => (
+                      <div key={u.id} className="flex items-start gap-3 p-3 bg-muted/20 rounded-xl">
+                        <div className={`h-2 w-2 rounded-full mt-1.5 flex-shrink-0 ${
+                          u.status === "COMPLETED" ? "bg-green-500" :
+                          u.status === "DECISION_MADE" ? "bg-blue-500" :
+                          u.status === "ADDITIONAL_INFO_REQUESTED" ? "bg-orange-500" :
+                          "bg-primary"
+                        }`}></div>
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-foreground">{u.status.replace(/_/g, " ")}</p>
+                          {u.message && <p className="text-[10px] text-muted-foreground">{u.message}</p>}
+                          {u.referenceUrl && (
+                            <a href={u.referenceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary hover:underline block mt-0.5">View Reference</a>
+                          )}
+                          <p className="text-[9px] text-muted-foreground mt-1">
+                            {u.updatedBy?.name} · {new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>

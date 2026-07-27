@@ -12,8 +12,7 @@ export async function GET(request: Request) {
     const where: any = {};
     if (applicationId) {
       where.applicationId = Number(applicationId);
-    }
-    if (!currentUser || currentUser.role !== "ADMIN") {
+    } else if (!currentUser || currentUser.role !== "ADMIN") {
       where.application = {
         assignedStaffId: currentUser?.id || 0,
       };
