@@ -564,6 +564,28 @@ export default function Home() {
     }
   };
 
+  const handleRequestReviewDirect = async (applicationId: number) => {
+    setReviewRequestLoading(true);
+    setReviewError(null);
+    try {
+      const res = await fetch("/api/quality-reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (selectedApplication) fetchQualityReviews(selectedApplication.id);
+      } else {
+        setReviewError(data.error || "Failed to request review");
+      }
+    } catch (err) {
+      setReviewError("Connection error");
+    } finally {
+      setReviewRequestLoading(false);
+    }
+  };
+
   const handleRequestReview = async (e: React.FormEvent) => {
     e.preventDefault();
     setReviewRequestLoading(true);
@@ -2859,9 +2881,8 @@ export default function Home() {
                   <button
                     onClick={() => {
                       setNewReviewApplicationId(selectedApplication.id);
-                      setNewReviewNotes("");
                       setReviewError(null);
-                      setIsRequestReviewOpen(true);
+                      handleRequestReviewDirect(selectedApplication.id);
                     }}
                     className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer"
                   >
