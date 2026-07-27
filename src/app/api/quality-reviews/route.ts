@@ -3,11 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 
 // GET /api/quality-reviews - List reviews
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const currentUser = await getCurrentUserFromCookies();
+    const { searchParams } = new URL(request.url);
+    const applicationId = searchParams.get("applicationId");
 
     const where: any = {};
+    if (applicationId) {
+      where.applicationId = Number(applicationId);
+    }
     if (!currentUser || currentUser.role !== "ADMIN") {
       where.application = {
         assignedStaffId: currentUser?.id || 0,

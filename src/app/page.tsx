@@ -238,6 +238,16 @@ export default function Home() {
   const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [activeDragApp, setActiveDragApp] = useState<any>(null);
 
+  // Quality Review State
+  const [qualityReviews, setQualityReviews] = useState<any[]>([]);
+  const [qualityReviewsLoading, setQualityReviewsLoading] = useState(false);
+  const [isRequestReviewOpen, setIsRequestReviewOpen] = useState(false);
+  const [newReviewApplicationId, setNewReviewApplicationId] = useState<number | null>(null);
+  const [newReviewNotes, setNewReviewNotes] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewRequestLoading, setReviewRequestLoading] = useState(false);
+  const [reviewDecisionLoading, setReviewDecisionLoading] = useState<number | null>(null);
+
   // Task Management State
   const [tasks, setTasks] = useState<any[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -504,6 +514,7 @@ export default function Home() {
       if (res.ok) {
         setSelectedApplication(data.application);
         fetchStageHistory(applicationId);
+        fetchQualityReviews(applicationId);
       }
     } catch (err) {
       console.error("Failed to load application:", err);
@@ -522,6 +533,70 @@ export default function Home() {
       console.error("Failed to load stage history:", err);
     } finally {
       setStageHistoryLoading(false);
+    }
+  };
+
+  const fetchQualityReviews = async (applicationId: number) => {
+    setQualityReviewsLoading(true);
+    try {
+      const res = await fetch(`/api/quality-reviews?applicationId=${applicationId}`);
+      const data = await res.json();
+      if (res.ok) setQualityReviews(data.reviews);
+    } catch (err) {
+      console.error("Failed to load quality reviews:", err);
+    } finally {
+      setQualityReviewsLoading(false);
+    }
+  };
+
+  const handleRequestReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReviewRequestLoading(true);
+    setReviewError(null);
+    try {
+      const res = await fetch("/api/quality-reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicationId: newReviewApplicationId,
+          notes: newReviewNotes || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsRequestReviewOpen(false);
+        setNewReviewNotes("");
+        setNewReviewApplicationId(null);
+        if (selectedApplication) fetchQualityReviews(selectedApplication.id);
+      } else {
+        setReviewError(data.error || "Failed to request review");
+      }
+    } catch (err) {
+      setReviewError("Connection error");
+    } finally {
+      setReviewRequestLoading(false);
+    }
+  };
+
+  const handleDecideReview = async (reviewId: number, decision: string) => {
+    setReviewDecisionLoading(reviewId);
+    try {
+      const res = await fetch("/api/quality-reviews", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: reviewId, decision }),
+      });
+      const data = await res.json();
+      if (res.ok && selectedApplication) {
+        fetchQualityReviews(selectedApplication.id);
+        if (decision === "APPROVED") {
+          setSelectedApplication((prev: any) => prev ? { ...prev, currentStage: "QUALITY_REVIEW" } : prev);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to decide review:", err);
+    } finally {
+      setReviewDecisionLoading(null);
     }
   };
 
@@ -2245,6 +2320,78 @@ export default function Home() {
                       </div>
                     )}
                   </>
+                )}
+              </div>
+
+              {/* Quality Review */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-primary" /> Quality Review
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setNewReviewApplicationId(selectedApplication.id);
+                      setNewReviewNotes("");
+                      setReviewError(null);
+                      setIsRequestReviewOpen(true);
+                    }}
+                    className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer"
+                  >
+                    Request Review
+                  </button>
+                </div>
+                {qualityReviewsLoading ? (
+                  <div className="py-8 flex justify-center"><div className="h-6 w-6 border-3 border-primary border-t-transparent rounded-full animate-spin"></div></div>
+                ) : qualityReviews.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center">No quality reviews requested yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {qualityReviews.map((r: any) => (
+                      <div key={r.id} className="flex items-start justify-between p-3 rounded-xl border border-border/60 bg-muted/10">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                              r.decision === "APPROVED" ? "bg-green-500/10 text-green-600" :
+                              r.decision === "REJECTED" ? "bg-red-500/10 text-red-500" :
+                              r.decision === "CORRECTIONS_REQUESTED" ? "bg-orange-500/10 text-orange-600" :
+                              "bg-yellow-500/10 text-yellow-600"
+                            }`}>
+                              {r.decision || "PENDING"}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">{r.reviewer?.name}</span>
+                          </div>
+                          {r.notes && <p className="text-xs text-foreground">{r.notes}</p>}
+                          <p className="text-[9px] text-muted-foreground mt-1">{new Date(r.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
+                        </div>
+                        {user?.role === "ADMIN" && !r.decision && (
+                          <div className="flex items-center gap-1 ml-4 flex-shrink-0">
+                            <button
+                              disabled={reviewDecisionLoading === r.id}
+                              onClick={() => handleDecideReview(r.id, "APPROVED")}
+                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer disabled:opacity-50"
+                            >
+                              ✓ Approve
+                            </button>
+                            <button
+                              disabled={reviewDecisionLoading === r.id}
+                              onClick={() => handleDecideReview(r.id, "CORRECTIONS_REQUESTED")}
+                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 cursor-pointer disabled:opacity-50"
+                            >
+                              Request Fixes
+                            </button>
+                            <button
+                              disabled={reviewDecisionLoading === r.id}
+                              onClick={() => handleDecideReview(r.id, "REJECTED")}
+                              className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer disabled:opacity-50"
+                            >
+                              ✕ Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
