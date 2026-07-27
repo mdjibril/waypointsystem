@@ -1561,7 +1561,9 @@ export default function Home() {
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-extrabold text-foreground">Welcome back, {user?.name}!</h3>
-                  <p className="text-xs text-muted-foreground">Here is the status of your travel applications and workflows today.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {user?.role === "ADMIN" ? "Full platform overview and performance metrics." : "Your assigned clients and tasks at a glance."}
+                  </p>
                 </div>
                 <button onClick={() => setCurrentTab("clients")} className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer">
                   <Plus className="h-4 w-4" /> New Client inquiry
@@ -1631,25 +1633,101 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Core Layout Panels */}
+              {/* Pipeline Chart + Decision Outcomes */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                {/* Pipeline Overview Section */}
                 <div className="xl:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <h4 className="font-bold text-sm text-foreground mb-4">Pipeline Overview</h4>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <div className="space-y-2.5">
                     {STAGE_ORDER.slice(0, 10).map((stage) => {
                       const count = applications.filter((a: any) => a.currentStage === stage).length;
+                      const maxCount = Math.max(...STAGE_ORDER.slice(0, 10).map((s) => applications.filter((a: any) => a.currentStage === s).length), 1);
+                      const pct = Math.round((count / (maxCount || 1)) * 100);
                       return (
-                        <div key={stage} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted/20 transition-colors">
-                          <span className="text-xs font-semibold text-foreground">{STAGE_LABELS[stage]}</span>
-                          <span className="text-[10px] font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{count}</span>
+                        <div key={stage} className="flex items-center gap-3">
+                          <span className="text-[11px] font-semibold text-foreground w-40 flex-shrink-0 truncate">{STAGE_LABELS[stage]}</span>
+                          <div className="flex-1 h-5 bg-muted/30 rounded-full overflow-hidden">
+                            <div className="h-full bg-primary/70 rounded-full transition-all duration-500" style={{ width: `${pct}%` }}></div>
+                          </div>
+                          <span className="text-[10px] font-bold text-muted-foreground w-6 text-right">{count}</span>
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Task Checklist Panel */}
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col">
+                  <h4 className="font-bold text-sm text-foreground mb-4">Decision Outcomes</h4>
+                  {(() => {
+                    const approved = applications.filter((a: any) => a.decisionStatus === "APPROVED").length;
+                    const refused = applications.filter((a: any) => a.decisionStatus === "REFUSED").length;
+                    const pending = applications.filter((a: any) => a.currentStage === "DECISION").length;
+                    const total = approved + refused + pending || 1;
+                    return (
+                      <div className="space-y-4 flex-1">
+                        <div>
+                          <div className="flex justify-between text-[11px] mb-1">
+                            <span className="font-semibold text-green-600">Approved</span>
+                            <span className="font-bold text-foreground">{approved}</span>
+                          </div>
+                          <div className="h-2.5 bg-muted/30 rounded-full overflow-hidden">
+                            <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.round((approved / total) * 100)}%` }}></div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[11px] mb-1">
+                            <span className="font-semibold text-red-600">Refused</span>
+                            <span className="font-bold text-foreground">{refused}</span>
+                          </div>
+                          <div className="h-2.5 bg-muted/30 rounded-full overflow-hidden">
+                            <div className="h-full bg-red-500 rounded-full" style={{ width: `${Math.round((refused / total) * 100)}%` }}></div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[11px] mb-1">
+                            <span className="font-semibold text-yellow-600">Pending Decision</span>
+                            <span className="font-bold text-foreground">{pending}</span>
+                          </div>
+                          <div className="h-2.5 bg-muted/30 rounded-full overflow-hidden">
+                            <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${Math.round((pending / total) * 100)}%` }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Staff Workload + Tasks */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                <div className="xl:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <h4 className="font-bold text-sm text-foreground mb-4">Staff Workload Distribution</h4>
+                  {(() => {
+                    const workload: Record<string, number> = {};
+                    tasks.forEach((t: any) => {
+                      if (t.assignee && t.status !== "DONE" && t.status !== "CANCELLED") {
+                        workload[t.assignee.name] = (workload[t.assignee.name] || 0) + 1;
+                      }
+                    });
+                    const entries = Object.entries(workload).sort((a, b) => b[1] - a[1]);
+                    const maxW = Math.max(...entries.map((e) => e[1]), 1);
+                    return entries.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-8 text-center">No active tasks assigned to staff</p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {entries.map(([name, count]) => (
+                          <div key={name} className="flex items-center gap-3">
+                            <span className="text-[11px] font-semibold text-foreground w-32 flex-shrink-0 truncate">{name}</span>
+                            <div className="flex-1 h-5 bg-muted/30 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-500/60 rounded-full transition-all duration-500" style={{ width: `${Math.round((count / maxW) * 100)}%` }}></div>
+                            </div>
+                            <span className="text-[10px] font-bold text-muted-foreground w-6 text-right">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+
                 <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col">
                   <h4 className="font-bold text-sm text-foreground mb-4">My High-Priority Tasks</h4>
                   <div className="space-y-3 flex-1 max-h-64 overflow-y-auto">
