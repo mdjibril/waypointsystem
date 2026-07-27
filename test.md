@@ -1181,3 +1181,164 @@ Log in via the browser at `http://localhost:3000` as admin (`admin@waypoint.com`
 
 4. **Build verification:**
    - `npm run build` — compiles successfully with no errors.
+# Phase 8 — Test Plan: Quality Review, Submission & Tracking
+
+## Setup
+
+```bash
+npm run dev
+npx prisma generate
+```
+
+Log in as admin (`admin@waypoint.com` / `password123`). Ensure at least one application exists in the system (preferably at a stage after "Document Collection & Verification"). If you don't have one, register a client and create a new application.
+
+---
+
+## Task 1 — Create quality review model/checklist
+
+### Test Steps
+
+1. **Schema models exist:**
+   - Open `prisma/schema.prisma` — the `QualityReview` model is present with fields: `id`, `applicationId`, `reviewerId`, `status`, `decision`, `notes`, `documentIds`, `decidedAt`.
+   - The `SubmissionRecord` model exists with: `id`, `applicationId` (unique), `referenceNumber`, `submittedAt`, `biometricsAt`, `portal`, `notes`.
+   - The `TrackingUpdate` model exists with: `id`, `applicationId`, `status`, `message`, `referenceUrl`.
+
+2. **API endpoints respond:**
+   - `curl http://localhost:3000/api/quality-reviews?applicationId=1` — returns `{ "reviews": [] }` (200).
+   - `curl http://localhost:3000/api/submissions?applicationId=1` — returns `{ "submission": null }` (200).
+   - `curl http://localhost:3000/api/tracking?applicationId=1` — returns `{ "updates": [] }` (200).
+
+3. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 2 — Build quality review queue
+
+### Test Steps
+
+1. **Quality Review panel visible on application detail:**
+   - Navigate to Applications, click "View" on any application.
+   - Scroll down below Payments — the "Quality Review" panel appears with a shield icon and "Request Review" button.
+
+2. **Empty state:**
+   - If no reviews exist for the application, the panel shows "No quality reviews requested yet".
+
+3. **Request a review:**
+   - Click "Request Review" — the review is submitted for the current application.
+   - The panel now shows a new review entry with status "PENDING" (yellow badge) and the reviewer's name.
+
+4. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 3 — Add review approval/correction flow
+
+### Test Steps
+
+1. **Admin sees decision buttons on pending reviews:**
+   - As admin, find a PENDING review in the Quality Review panel.
+   - Three buttons appear: "✓ Approve", "Request Fixes", "✕ Reject".
+
+2. **Staff does not see decision buttons:**
+   - Log in as staff, navigate to an application with a pending review.
+   - The review shows the status badge and reviewer name, but no decision buttons.
+
+3. **Approve a review:**
+   - As admin, click "✓ Approve" on a pending review.
+   - The badge changes to a green "APPROVED" and the decision buttons disappear.
+   - The application's stage in the header updates to "Quality Review".
+
+4. **Request corrections:**
+   - Create another review on a different application.
+   - Click "Request Fixes" — the badge changes to orange "CORRECTIONS_REQUESTED".
+
+5. **Reject a review:**
+   - On a third application, click "✕ Reject" — the badge changes to red "REJECTED".
+
+6. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 4 — Block application submission until review passes
+
+### Test Steps
+
+1. **Approved review updates application stage:**
+   - When a quality review is approved, the application currentStage advances to "QUALITY_REVIEW".
+   - This is visible in both the application detail header and the Pipeline Board.
+
+2. **Rejected/corrections reviews don't advance stage:**
+   - When a review is rejected or corrections are requested, the application stage remains unchanged.
+   - Verify this by checking the stage badge in the application header after each decision type.
+
+3. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 5 — Build submission details form
+
+### Test Steps
+
+1. **Submission panel visible on application detail:**
+   - On any application detail page, below the Quality Review panel, find "Submission Details" panel with a send icon.
+   - Initially shows "No submission details recorded yet".
+
+2. **Record submission details:**
+   - Click "Record Submission" — a modal opens with heading "Submission Details".
+   - Fill in: Reference Number "GWF123456789", Submission Date (pick today), Biometrics Date (pick a future date), Portal "VFS Global", Notes "Documents submitted".
+   - Click "Save Submission" — the modal closes and the panel now shows the entered details.
+
+3. **Edit submission:**
+   - Click "Edit Submission" — the modal reopens pre-filled with existing data.
+   - Change the portal to "TLScontact" and click "Save Submission" — the panel updates.
+
+4. **Submission form fields:**
+   - Reference Number (text)
+   - Submission Date (datetime-local picker)
+   - Biometrics Date (datetime-local picker)
+   - Portal (dropdown: VFS Global, TLScontact, UKVI, IRCC, USCIS, Other)
+   - Notes (text)
+
+5. **Build verification:**
+   - `npm run build` — compiles successfully.
+
+---
+
+## Task 6 — Add application tracking updates and reminders
+
+### Test Steps
+
+1. **Tracking panel visible:**
+   - Below Submission Details, find "Application Tracking" panel with a refresh icon.
+   - Initially shows "No tracking updates yet".
+
+2. **Add a tracking update:**
+   - Select status "Submitted" from the dropdown.
+   - Type a message "Application submitted at VFS Lagos".
+   - Click "Add" — a new entry appears in the timeline with a colored dot and the update details.
+
+3. **Color-coded status dots:**
+   - Submitted/Under Review: primary color (blue/purple)
+   - Info Requested: orange
+   - Decision Made: blue
+   - Passport Ready/Completed: green
+
+4. **Multiple updates form timeline:**
+   - Add 3-4 more updates with different statuses.
+   - The timeline shows entries in reverse chronological order (newest at top).
+   - Each entry shows: status, message, reference link (if provided), updated by, date/time.
+   - The list scrolls if it exceeds the container height.
+
+5. **Add update with reference URL:**
+   - Use the tracking form but skip the message, instead paste a URL like `https://visa-status.example.com/ref/ABC123`.
+   - The timeline entry shows a "View Reference" link that opens in a new tab.
+
+6. **Build verification:**
+   - `npm run build` — compiles successfully with no errors.
+
+
+---

@@ -170,12 +170,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| [ ] Create quality review model/checklist | Developer 1 | `feature/quality-review-model` | Workflow rules |
-| [ ] Build quality review queue | Developer 1 | `feature/quality-review-queue` | Quality review model |
-| [ ] Add review approval/correction flow | Developer 1 | `feature/review-approval-flow` | Quality review queue |
-| [ ] Block application submission until review passes | Developer 1 | `feature/submission-blocking` | Review approval flow |
-| [ ] Build submission details form: reference, date, biometrics, portal | Developer 2 | `feature/submission-details` | Submission blocking |
-| [ ] Add application tracking updates and reminders | Developer 2 | `feature/application-tracking` | Submission details |
+| [x] Create quality review model/checklist | Developer 1 | `feature/quality-review-model` | Workflow rules |
+| [x] Build quality review queue | Developer 1 | `feature/quality-review-queue` | Quality review model |
+| [x] Add review approval/correction flow | Developer 1 | `feature/review-approval-flow` | Quality review queue |
+| [x] Block application submission until review passes | Developer 1 | `feature/submission-blocking` | Review approval flow |
+| [x] Build submission details form: reference, date, biometrics, portal | Developer 2 | `feature/submission-details` | Submission blocking |
+| [x] Add application tracking updates and reminders | Developer 2 | `feature/application-tracking` | Submission details |
 
 Merge order:
 
