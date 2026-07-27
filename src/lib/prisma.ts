@@ -9,6 +9,7 @@ function createPrismaClient() {
     connectionString: process.env.DATABASE_URL!,
     max: 5,
     idleTimeoutMillis: 30000,
+    ssl: { rejectUnauthorized: false },
   });
   pool.on("error", (err) => {
     console.error("Unexpected pool error:", err);

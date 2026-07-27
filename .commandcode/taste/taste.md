@@ -14,3 +14,6 @@
 # testing
 - Prefer UI-based test steps over CLI/curl-based test steps in test plans. Confidence: 0.60
 
+# database
+- Use a shared pg.Pool (max 5) with the PrismaPg adapter instead of passing a raw connection string, to avoid exhausting Supabase's 15-connection session pool limit. Confidence: 0.70
+
