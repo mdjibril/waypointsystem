@@ -1355,6 +1355,91 @@ Log in as admin (`admin@waypoint.com` / `password123`). For Task 5 (full workflo
 
 ---
 
+## Task 1 — Add unit tests for workflow rules and permissions
+
+### Test Steps
+
+1. Run `npm test` — all existing tests should pass:
+   ```bash
+   npm test
+   ```
+   Expected output: 48 tests passed (16 permissions + 15 workflow + 17 integration).
+
+2. Run the permissions test file in isolation:
+   ```bash
+   npx vitest run tests/permissions.test.ts
+   ```
+   Expected: 16 tests pass. Covers `isAdmin`, `canAccessClient`, `canManageClients`, `canManageApplications`, `canTransitionApplication`, `canCreateTask`, `canUpdateTask`, `canVerifyDocument`, `canRecordPayment`, `canConfirmPayment`, `canDecideQualityReview`.
+
+3. Run the workflow test file in isolation:
+   ```bash
+   npx vitest run tests/workflow.test.ts
+   ```
+   Expected: 15 tests pass. Covers `STAGE_ORDER` integrity, `getAllowedNextStages` for every stage (including terminal stages and DECISION), `isValidTransition` rejection of invalid moves, and `stageForDecision` outcome mapping.
+
+4. Verify test files exist at `tests/permissions.test.ts` and `tests/workflow.test.ts`.
+
+5. Run `npx vitest run` — confirms that `vitest.config.ts` resolves the `@` alias correctly (maps to `./src`).
+
+6. Run `npm run build` — compiles successfully with no test-related errors.
+
+---
+
+## Task 2 — Add basic integration tests for client, task, and application flows
+
+### Test Steps
+
+1. Run the integration test file:
+   ```bash
+   npx vitest run tests/integration.test.ts
+   ```
+   Expected: 17 tests pass across three suites:
+   - **Client flow** (5 tests): admin create → 201, staff create blocked → 403, admin list all, staff list assigned only (`where: { assignedStaffId: 2 }`), admin reassign → 200.
+   - **Application flow** (6 tests): admin create linked to client → 201, list all, staff sees assigned only (`where: { client: { assignedStaffId: 2 } }`), admin stage change via PATCH, stage transition via POST `[id]/stage` with valid move.
+   - **Task flow** (6 tests): admin create with assignee → 201, staff sees own tasks only (`where: { assigneeId: 2 }`), admin sees all (`where: {}`), assignee marks own done → 200, non-assignee staff blocked → 403, admin reassign → 200, unauthenticated returns empty list.
+
+2. Verify `tests/integration.test.ts` mocks `@/lib/prisma`, `next/headers`, `@/lib/activityLog`, and `@/lib/notifications` without hitting a live database.
+
+3. Run `npm test` — all 48 tests pass (unit + integration).
+
+---
+
+## Task 3 — Add production environment configuration guide
+
+### Test Steps
+
+1. Open `README.md` — verify the following sections exist:
+   - **Environment Variables** table: documents `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+   - **Why two database URLs?** section: explains transaction pooler (6543, runtime) vs session pooler (5432, migrations).
+   - **Connection pools** section: describes shared `pg.Pool` (max 5) with `PrismaPg` adapter and SSL config.
+   - **Production Build** section: `npm run build` then `npm run start` on port 3000.
+   - **Deployment** section with three options: Vercel, Docker, Bare Metal/VPS (including PM2 setup).
+
+2. Verify `.env.example` shows both `DATABASE_URL` (port 6543, `sslmode=no-verify`) and `MIGRATION_DATABASE_URL` (port 5432, `sslmode=require`).
+
+3. Verify `prisma.config.ts` reads `MIGRATION_DATABASE_URL` with fallback to `DATABASE_URL`.
+
+4. Run `cat README.md | head -5` — should show "Way Point Travel — Visa & Workflow Management System".
+
+---
+
+## Task 4 — Prepare database migration/deployment checklist
+
+### Test Steps
+
+1. Open `DEPLOYMENT.md` — verify the following sections exist:
+   - **Pre-Deployment**: 5 verification steps (migrations applied, env vars correct, Prisma client regenerated, migration history clean, build passes).
+   - **Migration Steps (Production)**: `npm run db:deploy` and `npm run db:migrate` commands with explanations.
+   - **After Migration — Verify Data Integrity**: SQL query listing all 12 table row counts.
+   - **Rollback Plan**: Creating reverse migrations, Supabase backup restore, migration lock resolution.
+   - **Current Migration History**: Table listing all 9 migrations with dates and contents.
+
+2. Run `npx prisma migrate status` — should show "Database is up to date" (if connected to Supabase).
+
+3. Verify the post-deployment checklist in the doc has checkboxes for all 12 verification items.
+
+---
+
 ## Task 5 — Test full admin workflow from inquiry to decision (End-to-End Manual QA)
 
 This test walks through the complete lifecycle of a visa application in Way Point: from first client contact through all 12 pipeline stages to a final decision. Follow each step in order — they depend on the preceding state.
@@ -1632,77 +1717,44 @@ After completing all steps above, verify:
 - [ ] All 48 tests pass
 - [ ] Production build compiles
 
-
 ---
 
-# Phase 9 — Test Plan: Dashboards And Reports
-
-## Setup
-
-```bash
-npm run dev
-npx prisma generate
-```
-
-Log in as admin (`admin@waypoint.com` / `password123`). Have a staff user, some tasks, applications at different stages, and confirmed payments for testing charts. If you don't have any, create them first via the UI.
-
----
-
-## Task 1-4 — Enhanced admin and staff dashboards
+## Task 6 — Fix final bugs from QA
 
 ### Test Steps
 
-1. **Dashboard header is role-aware:**
-   - As admin: header says "Full platform overview and performance metrics."
-   - Log in as staff: header says "Your assigned clients and tasks at a glance."
+1. **Verify task reassignment dropdown works:**
+   - Log in as admin (`admin@waypoint.com` / `password123`).
+   - Navigate to **Tasks** tab.
+   - In the Assignee column, each task row should show a **dropdown** with all staff members, not static text.
+   - Select a different staff member from the dropdown on any task.
+   - The task's assignee updates immediately — no page reload needed.
+   - Open the notification bell — a "TASK_ASSIGNED" notification is generated for the new assignee.
+   - Navigate to the client's profile for that task — activity log shows "Task was assigned to [Staff Name]".
 
-2. **Pipeline bar charts:**
-   - Pipeline Overview shows horizontal bar charts for each stage instead of plain counts.
-   - Each bar's width is proportional to the highest stage count.
-   - Count numbers appear to the right of each bar.
+2. **Verify non-admin sees static assignee:**
+   - Log in as staff (`staff@waypoint.com` / `password123`).
+   - Navigate to Tasks tab.
+   - The Assignee column shows plain text (name or "Unassigned"), never a dropdown.
 
-3. **Decision Outcomes panel:**
-   - Shows Approved, Refused, and Pending Decision bars with percentages.
-   - Data reflects actual application decision statuses, not hardcoded.
+3. **Verify migration URL configuration:**
+   - Open `prisma.config.ts` — should read `MIGRATION_DATABASE_URL` with fallback to `DATABASE_URL`.
+   - Open `.env` — `MIGRATION_DATABASE_URL` should point to port 5432 (session pooler), `DATABASE_URL` to port 6543 (transaction pooler).
+   - Run `npm run db:migrate` — should use the session pooler URL. (If no pending migrations, it will report "No pending migrations to apply.")
 
-4. **Staff Workload Distribution:**
-   - Shows each staff member with active (non-DONE, non-CANCELLED) task count.
-   - Horizontal bars with name on the left and count on the right.
-   - Shows "No active tasks assigned to staff" when empty.
+4. **Verify `.env.example` is updated:**
+   - Open `.env.example` — shows both URLs with correct port numbers and `sslmode` flags.
+   - The comment for `DATABASE_URL` says "transaction pooler, port 6543 — used at runtime".
+   - The comment for `MIGRATION_DATABASE_URL` says "session pooler, port 5432 — used for prisma migrate commands".
 
-5. **Build verification:**
-   - `npm run build` — compiles successfully.
+5. **Run full test suite:**
+   ```bash
+   npm test
+   ```
+   Expected: 48 tests pass.
 
----
-
-## Task 5-6 — Reports page with live charts and filters
-
-### Test Steps
-
-1. **Reports tab visible to admin only:**
-   - As admin: "Reports" appears in the sidebar.
-   - Log in as staff: "Reports" tab is hidden.
-
-2. **Visa Approval Rates by Destination:**
-   - Navigate to Reports tab.
-   - Bar chart shows each destination country with vertical bars.
-   - Each bar shows the approval rate as percentage and count (e.g. "88% (7/8)").
-   - Shows "No application data yet" if no apps exist.
-
-3. **Revenue by Service Type:**
-   - Shows confirmed payment revenue grouped by service type.
-   - Horizontal bars with total revenue and payment count.
-   - Shows "No confirmed payments yet" when empty.
-
-4. **Pipeline Bottleneck Analysis:**
-   - Shows all 10 pipeline stages with counts.
-   - Color-coded: red (>5 apps), yellow (2-5), blue (<2).
-   - Helps identify which stages have backlog.
-
-5. **Task Completion by Staff:**
-   - Each staff member shows done/total tasks and percentage.
-   - Completion rate bar fills proportionally.
-   - Shows "No tasks assigned yet" when empty.
-
-6. **Build verification:**
-   - `npm run build` — compiles successfully with no errors.
+6. **Run production build:**
+   ```bash
+   npm run build
+   ```
+   Expected: Compiles successfully, no errors.
