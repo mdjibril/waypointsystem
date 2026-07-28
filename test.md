@@ -1444,251 +1444,108 @@ Log in as admin (`admin@waypoint.com` / `password123`). For Task 5 (full workflo
 
 This test walks through the complete lifecycle of a visa application in Way Point: from first client contact through all 12 pipeline stages to a final decision. Follow each step in order — they depend on the preceding state.
 
-### Step 1 — Create Staff User
+### Pre-requisite: Seed Test Data
 
-**Goal:** Ensure a staff member exists to assign work to.
+Run the reset-and-seed script to populate 8 test clients with full pipeline applications:
 
-1. Navigate to **Staff Management** (Sidebar → Staff Management).
-2. Click **"Add Staff Member"**.
-3. Fill in:
-   - Full Name: `QA Staff`
-   - Email Address: `qastaff@waypoint.com`
-   - Phone: `1234567890`
-   - Role: `Staff`
-4. Click **"Create Account"** — success: "Staff member added successfully! Default password is 'password123'."
-5. The new staff member appears in the table with role badge "STAFF" and status "Active".
+```bash
+npx tsx scripts/reset-and-seed.ts
+```
 
-### Step 2 — Create a Client (CLIENT_INQUIRY)
+This creates:
 
-**Goal:** Register a new client who wants a UK Tourist Visa.
+| Client | Staff | Destination | Outcome | Final Stage |
+|--------|-------|-------------|---------|-------------|
+| Benjamin Bitrus | staff@waypoint.com | United Kingdom | APPROVED | VISA_APPROVED_PATH |
+| Musa Ahmad | staff@waypoint.com | France | APPROVED | VISA_APPROVED_PATH |
+| Bilkisu Yunus | staff@waypoint.com | Saudi Arabia | APPROVED | VISA_APPROVED_PATH |
+| Fatima Kabir | staff@waypoint.com | Australia | APPROVED | VISA_APPROVED_PATH |
+| Keneth David | staff@waypoint.com | Canada | REFUSED | VISA_REFUSED_PATH |
+| Joshua David | user@waypoint.com | Saudi Arabia | REFUSED | VISA_REFUSED_PATH |
+| Rechael Afolabi | user@waypoint.com | United Kingdom | WITHDRAWN | DECISION |
+| Okoro Prince | user@waypoint.com | France | PENDING_ACTION | DECISION |
 
-1. Navigate to **Clients** tab.
-2. Click **"Register Client"**.
-3. Fill in:
-   - First Name: `David`
-   - Last Name: `Williams`
-   - Email: `david@example.com`
-   - Phone: `+2348012345678`
-   - Address: `15 Broad Street, Lagos Island`
-   - Passport Number: `B98765432`
-   - Date of Birth: `1985-08-12`
-   - Source: `Referral`
-   - Assign Staff: `QA Staff`
-4. Click **"Register Client"** — success: "Client registered successfully! File number: WP-2026-XXXX".
-5. The new client row shows in the table with `QA Staff` as assigned staff.
+All applications have complete stage history from CLIENT_INQUIRY through to their current stage. Use these as reference data to verify the pipeline, reports, and dashboard.
 
-Verify: This represents the **CLIENT_INQUIRY** stage — the client has made first contact.
+### Step 1 — Verify Pre-Seeded Data
 
-### Step 3 — Create an Application
+**Goal:** Confirm all 8 clients and applications loaded correctly.
 
-**Goal:** Open a visa application for the client.
+1. Log in as admin (`admin@waypoint.com` / `password123`).
+2. Navigate to **Clients** tab — verify all 8 clients appear with correct staff assignments:
+   - Benjamin Bitrus, Musa Ahmad, Bilkisu Yunus, Fatima Kabir, Keneth David → `Staff Officer` (staff@)
+   - Joshua David, Rechael Afolabi, Okoro Prince → `user@waypoint.com`
+3. Click "View File" on Benjamin Bitrus — the client profile shows a UK Tourist Visa at `VISA_APPROVED_PATH` with stage history from CLIENT_INQUIRY through VISA_APPROVED_PATH.
+4. Click "View File" on Okoro Prince — application is at `DECISION` stage with `PENDING_ACTION`.
+5. Click "View File" on Rechael Afolabi — application is at `DECISION` stage with `WITHDRAWN`.
+6. Click "View File" on Joshua David — application is at `VISA_REFUSED_PATH` with `REFUSED`.
 
-1. Stay on Clients tab, find David Williams, click **"View File"** — client profile opens.
-2. In the Applications section, click **"Create Application"** (green + button).
-3. Fill in:
-   - Service Type: `UK Tourist Visa`
-   - Destination Country: `United Kingdom`
-   - Travel Purpose: `Tourism / Holiday`
-   - Expected Travel Date: pick a date 3 months from now
-   - Assign Staff: `QA Staff`
-4. Click **"Create Application"** — success message appears.
-5. The application card shows in the client profile with:
-   - Service type badge
-   - Stage: `Client Inquiry`
-   - Status: `NOT_STARTED`
+### Step 2 — Verify Pipeline Board
 
-Verify: Client inquiry is recorded, application exists at first pipeline stage.
+1. Navigate to **Applications** tab.
+2. Pipeline Board shows: DECISION (2 cards), VISA_APPROVED_PATH (4), VISA_REFUSED_PATH (2).
+3. Click any application card — detail page loads with full stage history.
 
-### Step 4 — Move Through Pipeline Stages
+### Step 3 — Verify Dashboard Metrics
 
-For each stage below, use the **Application detail page** stage dropdown selector (or the Pipeline Board) to advance the application. Verify the stage updates after each move.
+1. Navigate to **Dashboard**.
+2. Active Clients: **8**. Pipeline: 2 at DECISION, 4 at VISA_APPROVED_PATH, 2 at VISA_REFUSED_PATH.
+3. Decision Outcomes: Approved 4, Refused 2, Pending Decision 2.
 
-#### Stage 1 → 2: CUSTOMER_SERVICE_REGISTRATION
+### Step 4 — Verify Reports
 
-1. Open the application detail (click the application card).
-2. Click the stage dropdown in the header — select **"Customer Service Registration"**.
-3. Verify: Stage badge updates. Stage history shows "Client Inquiry → Customer Service Registration".
-4. Status changes to `IN_PROGRESS`.
+1. Navigate to **Reports** (admin only).
+2. Visa Approval Rates by Destination:
+   - **United Kingdom**: 1 approved / 2 total (Benjamin OK, Rechael withdrawn)
+   - **France**: 1 approved / 2 total (Musa OK, Okoro pending)
+   - **Saudi Arabia**: 1 approved, 1 refused / 2 total
+   - **Australia**: 1 approved / 1 total
+   - **Canada**: 0 approved, 1 refused / 1 total
+3. Pipeline Bottleneck Analysis shows full stage distribution.
 
-#### Stage 2 → 3: INITIAL_CONSULTATION
+### Step 5 — Verify Client Profiles and Activity Log
 
-1. Select **"Initial Consultation"** from the stage dropdown.
-2. Verify: Stage changes. History records the transition.
+1. Open Benjamin Bitrus' profile — activity timeline shows all stage history entries.
+2. The Applications panel shows the UK Tourist Visa with correct stage and decision badge.
+3. Open Okoro Prince's profile — shows DECISION stage with PENDING_ACTION decision status badge.
 
-#### Stage 3 → 4: PAYMENT_SERVICE_AGREEMENT
+### Step 6 — Test Task Reassignment (Admin Only)
 
-1. Select **"Payment & Service Agreement"**.
-2. **Create a task** for this stage:
-   - Navigate to **Tasks** tab → **"Create Task"**
-   - Title: `Send service agreement to David Williams`
-   - Client: `David Williams`
-   - Application: select the UK Tourist Visa application
-   - Stage: `Payment & Service Agreement`
-   - Assignee: `QA Staff`
-   - Priority: `HIGH`
-   - Click "Create Task" — success.
-3. Navigate to **Payments** tab → **"Record Payment"**:
-   - Client: `David Williams`
-   - Amount: `150000`
-   - Currency: `NGN`
-   - Method: `Bank Transfer`
-   - Click "Record Payment".
-4. The payment appears with `PENDING` status. Click **"✓ Confirm"** — badge changes to `CONFIRMED` (green).
-5. Return to the application detail — Payments card shows the ₦150,000 confirmed payment.
+1. Navigate to **Tasks** tab → **"Create Task"**.
+2. Fill in: Title `Follow up with Okoro Prince`, Client `Okoro Prince`, Stage `Decision`, Assignee `user@waypoint.com`, Priority `HIGH`.
+3. Click "Create Task" — success.
+4. In the Tasks table, the Assignee column for this task shows a **dropdown** (admin only).
+5. Change assignee from `user@waypoint.com` to your admin account via the dropdown.
+6. Verify: Task updates. Notification bell shows "TASK_ASSIGNED" notification.
 
-Verify: Payment recorded and confirmed. Task created and assigned.
+### Step 7 — Verify Staff Views (Permission Enforcement)
 
-#### Stage 4 → 5: DOCUMENT_COLLECTION_VERIFICATION
+1. Log out, log in as staff (`staff@waypoint.com` / `password123`).
+2. Clients tab: only 5 visible (Benjamin, Musa, Bilkisu, Fatima, Keneth).
+3. Task assignee column: **static text only**, no dropdown.
+4. Reports and Staff Management tabs are hidden from staff.
 
-1. Select **"Document Collection & Verification"**.
-2. **Upload documents** for this application:
-   - Navigate to **Documents** tab → **"Upload File"**
-   - Document Type: `Passport` (from templates dropdown)
-   - Client: `David Williams`
-   - File Name: `david_williams_passport.pdf`
-   - Choose a file (any PDF/image).
-   - Click **"Record Document"**.
-3. Repeat for another document type (e.g., `Bank Statements`).
-4. **Verify documents** (admin action):
-   - Find the pending documents in the queue.
-   - Click **"✓ Verify"** on each — status changes to `VERIFIED` (green).
-5. Return to Dashboard — **Documents Pending Review** count should be 0.
+### Step 8 — Test Decision Action on PENDING_ACTION Application
 
-Verify: Documents uploaded and verified. Application can proceed.
+1. Log in as admin again.
+2. Open Okoro Prince's application detail (DECISION stage, PENDING_ACTION).
+3. Click stage dropdown → select **"VISA_APPROVED_PATH"**.
+4. Verify: Stage updates, status becomes COMPLETED.
+5. Dashboard now shows 5 Approved, 2 Refused, 1 Pending (Rechael's WITHDRAWN).
 
-#### Stage 5 → 6: VISA_PROCESSING
-
-1. Select **"Visa Processing"**.
-2. **Create tasks** for visa processing work:
-   - `Fill DS-160 form` → assigned to QA Staff, priority HIGH
-   - `Prepare supporting letter` → assigned to QA Staff, priority MEDIUM
-3. As QA Staff, mark tasks as Done via the Tasks tab status dropdown.
-4. Verify tasks disappear from "High-Priority Tasks" dashboard panel when completed.
-
-#### Stage 6 → 7: QUALITY_REVIEW
-
-1. Select **"Quality Review"**.
-2. On the application detail, scroll to the Quality Review panel.
-3. Click **"Request Review"** — a PENDING review entry appears.
-4. Click **"✓ Approve"** on the review — badge changes to green `APPROVED`.
-5. The application stage updates to `Quality Review`.
-
-Verify: Quality review approved. Application can proceed to submission.
-
-#### Stage 7 → 8: APPLICATION_SUBMISSION
-
-1. Select **"Application Submission"**.
-2. Scroll to Submission Details panel → click **"Record Submission"**:
-   - Reference Number: `GWF-2026-0012345`
-   - Submission Date: today's date
-   - Biometrics Date: +2 weeks from today
-   - Portal: `VFS Global`
-   - Notes: `Submitted at VFS Lagos office`
-   - Click "Save Submission".
-3. Verify: Submission details panel shows all entered info with reference number and dates.
-
-#### Stage 8 → 9: APPLICATION_TRACKING
-
-1. Select **"Application Tracking"**.
-2. Scroll to Application Tracking panel:
-   - Status: `Submitted`
-   - Message: `Application received by UKVI`
-   - Click "Add" — first timeline entry appears.
-3. Add another update:
-   - Status: `Under Review`
-   - Message: `Application under assessment`
-   - Click "Add".
-4. Add a 3rd update:
-   - Status: `Decision Made`
-   - Message: `Decision has been made`
-   - Reference URL: `https://visa-status.example.com/ref/GWF-2026-0012345`
-   - Click "Add".
-5. Verify: Timeline shows 3 entries in reverse chronological order. Each has a colored status dot and timestamp.
-
-#### Stage 9 → 10: DECISION
-
-1. Select the current stage dropdown → pick **"Decision"**.
-2. A decision modal opens with outcome options: Approved, Refused, Withdrawn, Pending Action.
-   - Select **"Approved"**.
-   - Note: `Application approved — client notified via email.`
-   - Click "Confirm Decision".
-3. The application moves to **VISA_APPROVED_PATH** stage. Status changes to `COMPLETED`.
-4. Stage history shows the full path: ...→ Application Tracking → Decision → Visa Approved Path.
-
-### Step 5 — Verify Dashboard and Reports
-
-1. Navigate to **Dashboard**:
-   - Active Clients card shows the client count.
-   - Visa Pipeline card shows applications by stage.
-   - Decision Outcomes panel shows 1 Approved.
-   - Staff Workload panel shows QA Staff with completed tasks.
-   - Outstanding Balance shows any remaining pending payments.
-
-2. Navigate to **Reports**:
-   - Visa Approval Rates by Destination shows 100% for United Kingdom.
-   - Revenue by Service Type shows ₦150,000 for UK Tourist Visa.
-   - Pipeline Bottleneck Analysis shows current stage distribution.
-   - Task Completion by Staff shows QA Staff's completion rate.
-
-### Step 6 — Verify Activity Log
-
-1. Open David Williams' client profile (Clients → View File).
-2. Scroll to the activity timeline — every action taken should be logged:
-   - Client created
-   - Application created
-   - Stage transitions (all 10 moves)
-   - Task creations and completions
-   - Payment recorded and confirmed
-   - Documents uploaded and verified
-   - Quality review requested and approved
-   - Submission details recorded
-   - Tracking updates added
-   - Decision made
-
-### Step 7 — Verify Notification System
-
-1. Click the **bell icon** in the topbar.
-2. Verify notifications exist for:
-   - Task assignments to QA Staff
-   - Stage change notifications (when assigned staff isn't the person making the change)
-3. Click a notification — should link to the relevant client/application view.
-
-### Step 8 — Test Alternative Decision Path (Refused)
-
-To verify the REFUSED path works:
-
-1. Create another client (e.g., `Sarah Connor`, `sarah@example.com`).
-2. Create a UK Tourist Visa application for Sarah.
-3. Fast-track through stages 2-9 (each stage move via dropdown).
-4. At DECISION stage, select **"Refused"** → confirm.
-5. Verify: Application moves to **VISA_REFUSED_PATH** stage. Status is `COMPLETED`.
-6. Dashboard Decision Outcomes now shows 1 Approved + 1 Refused.
-7. Reports → Visa Approval Rates now shows 50% for United Kingdom.
-
-### Step 9 — Test Task Reassignment (Admin Only)
-
-1. Create a new task for any client: Title `QA reassignment test`, assign to QA Staff.
-2. In the Tasks table, find the task row — in the Assignee column, a **dropdown** appears (admin only).
-3. Change the assignee from QA Staff to your admin account using the dropdown.
-4. Verify: The task immediately updates. The notification bell shows a new "TASK_ASSIGNED" notification for the admin user.
-5. As staff (`qastaff@waypoint.com` / `password123`), the task should disappear from their task list (they only see their own tasks).
-6. The assignee dropdown is **not** visible when logged in as staff — only static assignee name.
-
-### Step 10 — Verify Test Suite
+### Step 9 — Verify Test Suite
 
 ```bash
 npm test
 ```
+Expected: 48 tests pass (16 permissions + 15 workflow + 17 integration).
 
-Expected: All 48 tests pass (16 permissions + 15 workflow + 17 integration).
-
-### Step 11 — Build Verification
+### Step 10 — Build Verification
 
 ```bash
 npm run build
 ```
-
-Expected: Compiles successfully with no errors. Routes show in build output with `ƒ` (Dynamic) markers for API routes.
+Expected: Compiles with no errors. Routes show `ƒ` markers for API routes.
 
 ---
 
@@ -1696,24 +1553,16 @@ Expected: Compiles successfully with no errors. Routes show in build output with
 
 After completing all steps above, verify:
 
-- [ ] Client created with auto-generated file number
-- [ ] Application created and linked to client
-- [ ] All 10 pipeline stage transitions work (CLIENT_INQUIRY through DECISION)
-- [ ] Stage history records every transition
-- [ ] Tasks created, assigned, reassigned, and completed
-- [ ] Payments recorded and confirmed
-- [ ] Documents uploaded and verified
-- [ ] Quality review requested, approved, rejected, corrections requested
-- [ ] Submission details recorded and displayed
-- [ ] Tracking updates form a timeline
-- [ ] Both decision outcomes (APPROVED → VISA_APPROVED_PATH, REFUSED → VISA_REFUSED_PATH) work
-- [ ] Activity log captures all actions
-- [ ] Notifications generated for task assignments and stage changes
-- [ ] Dashboard metrics reflect real data
-- [ ] Reports page shows charts with actual data
-- [ ] Staff user sees only assigned clients/tasks
-- [ ] Admin-only actions hidden from staff
+- [ ] All 8 clients loaded with correct staff assignments (5 staff@, 3 user@)
+- [ ] All 8 applications have complete stage history records
+- [ ] Pipeline Board shows correct distribution (2 DECISION, 4 APPROVED, 2 REFUSED)
+- [ ] Decision outcomes: 4 APPROVED, 2 REFUSED, 1 WITHDRAWN, 1 PENDING_ACTION
+- [ ] Dashboard metrics reflect real data (8 clients, correct stage/decision counts)
+- [ ] Reports show approval rates by destination with 2 Saudi Arabia entries
 - [ ] Task reassignment dropdown works for admin
+- [ ] Staff cannot see other staff's clients (only 5 of 8 visible)
+- [ ] Staff cannot reassign tasks or access admin-only tabs
+- [ ] Moving Okoro Prince from DECISION to VISA_APPROVED_PATH works
 - [ ] All 48 tests pass
 - [ ] Production build compiles
 
