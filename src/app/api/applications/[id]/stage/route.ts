@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
-import { isValidTransition, stageForDecision, DecisionOutcome, TERMINAL_STAGES } from "@/lib/workflow";
+import { isValidTransition, stageForDecision, DecisionOutcome, TERMINAL_STAGES, STAGE_LABELS } from "@/lib/workflow";
 import { WorkflowStage } from "@/types";
+import { logActivity } from "@/lib/activityLog";
+import { createNotification } from "@/lib/notifications";
 
 // GET /api/applications/[id]/stage - Stage history for an application
 export async function GET(
@@ -155,6 +157,26 @@ export async function POST(
         include: { changedBy: { select: { id: true, name: true } } },
       }),
     ]);
+
+    await logActivity({
+      clientId: updatedApplication.clientId,
+      entityType: "APPLICATION",
+      entityId: updatedApplication.id,
+      action: "STAGE_CHANGED",
+      description: `${fromStage ? `${STAGE_LABELS[fromStage] || fromStage} → ` : ""}${STAGE_LABELS[toStage as WorkflowStage] || toStage}${note ? ` — ${note}` : ""}`,
+      actorId: currentUser.id,
+    });
+
+    const notifyStaffId = updatedApplication.assignedStaffId;
+    if (notifyStaffId && notifyStaffId !== currentUser.id) {
+      await createNotification({
+        userId: notifyStaffId,
+        type: "STAGE_CHANGED",
+        title: "Application stage changed",
+        message: `${updatedApplication.client.firstName} ${updatedApplication.client.lastName}'s application moved to ${STAGE_LABELS[toStage as WorkflowStage] || toStage}.`,
+        link: `clients:${updatedApplication.clientId}`,
+      });
+    }
 
     return NextResponse.json({ application: updatedApplication, history: historyEntry });
   } catch (error: any) {

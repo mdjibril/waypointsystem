@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { logActivity } from "@/lib/activityLog";
+import { formatAmount } from "@/lib/currency";
 
 // GET /api/payments - List payments (ADMIN: all, STAFF: assigned clients only)
 export async function GET() {
@@ -111,6 +113,15 @@ export async function POST(request: Request) {
       },
     });
 
+    await logActivity({
+      clientId: payment.clientId,
+      entityType: "PAYMENT",
+      entityId: payment.id,
+      action: "PAYMENT_RECORDED",
+      description: `Payment of ${formatAmount(payment.amount, payment.currency)} recorded (Invoice ${payment.invoiceNumber})`,
+      actorId: currentUser.id,
+    });
+
     return NextResponse.json({ payment }, { status: 201 });
   } catch (error: any) {
     console.error("Create payment error:", error);
@@ -169,6 +180,17 @@ export async function PATCH(request: Request) {
         confirmedBy: { select: { id: true, name: true, email: true } },
       },
     });
+
+    if (status === "CONFIRMED" || status === "REJECTED") {
+      await logActivity({
+        clientId: payment.clientId,
+        entityType: "PAYMENT",
+        entityId: payment.id,
+        action: status === "CONFIRMED" ? "PAYMENT_CONFIRMED" : "PAYMENT_REJECTED",
+        description: `Payment (Invoice ${payment.invoiceNumber}) was ${status === "CONFIRMED" ? "confirmed" : "rejected"}`,
+        actorId: currentUser.id,
+      });
+    }
 
     return NextResponse.json({ payment });
   } catch (error: any) {
