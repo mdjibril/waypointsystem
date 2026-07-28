@@ -210,12 +210,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| [ ] Create activity log model and helper | Developer 1 | `feature/activity-log` | Core models |
-| [ ] Show activity timeline on client/application profile | Developer 2 | `feature/activity-timeline` | Activity log, client profile |
-| [ ] Add in-app notification model | Developer 1 | `feature/notification-model` | Task model |
-| [ ] Build notification dropdown/list | Developer 2 | `feature/notification-ui` | Notification model |
-| [ ] Trigger notifications for task assignment, overdue tasks, and stage changes | Developer 1 | `feature/notification-triggers` | Notification UI |
-| [ ] Improve validation, loading states, empty states, and error states | Developer 2 | `feature/ui-polish` | Most UI complete |
+| [x] Create activity log model and helper | Developer 1 | `feature/activity-log` | Core models |
+| [x] Show activity timeline on client/application profile | Developer 2 | `feature/activity-timeline` | Activity log, client profile |
+| [x] Add in-app notification model | Developer 1 | `feature/notification-model` | Task model |
+| [x] Build notification dropdown/list | Developer 2 | `feature/notification-ui` | Notification model |
+| [x] Trigger notifications for task assignment, overdue tasks, and stage changes | Developer 1 | `feature/notification-triggers` | Notification UI |
+| [x] Improve validation, loading states, empty states, and error states | Developer 2 | `feature/ui-polish` | Most UI complete |
 
 Merge order:
 
@@ -230,12 +230,12 @@ Merge order:
 
 | Task | Owner | Branch | Depends On |
 | --- | --- | --- | --- |
-| [ ] Add unit tests for workflow rules and permissions | Developer 1 | `feature/workflow-permission-tests` | Workflow and auth |
-| [ ] Add basic integration tests for client, task, and application flows | Developer 2 | `feature/core-flow-tests` | Main features complete |
-| [ ] Add production environment configuration guide | Developer 1 | `feature/deployment-docs` | Project setup |
-| [ ] Prepare database migration/deployment checklist | Developer 1 | `feature/db-deployment-checklist` | Database stable |
-| [ ] Test full admin workflow from inquiry to decision | Developer 2 | `feature/manual-qa-admin-flow` | Main features complete |
-| [ ] Fix final bugs from QA | Both | `fix/final-qa-issues` | QA complete |
+| [x] Add unit tests for workflow rules and permissions | Developer 1 | `feature/workflow-permission-tests` | Workflow and auth |
+| [x] Add basic integration tests for client, task, and application flows | Developer 2 | `feature/core-flow-tests` | Main features complete |
+| [x] Add production environment configuration guide | Developer 1 | `feature/deployment-docs` | Project setup |
+| [x] Prepare database migration/deployment checklist | Developer 1 | `feature/db-deployment-checklist` | Database stable |
+| [x] Test full admin workflow from inquiry to decision | Developer 2 | `feature/manual-qa-admin-flow` | Main features complete |
+| [x] Fix final bugs from QA | Both | `fix/final-qa-issues` | QA complete |
 
 Merge order:
 

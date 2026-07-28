@@ -1418,6 +1418,23 @@ export default function Home() {
     }
   };
 
+  const handleReassignTask = async (taskId: number, newAssigneeId: string) => {
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: taskId, assigneeId: newAssigneeId ? Number(newAssigneeId) : null }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? data.task : t)));
+      }
+    } catch (err) {
+      console.error("Failed to reassign task:", err);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col md:flex-row bg-background font-sans relative overflow-hidden">
@@ -3585,7 +3602,18 @@ export default function Home() {
                                     )}
                                   </td>
                                   <td className="p-4">
-                                    {t.assignee ? (
+                                    {user?.role === "ADMIN" ? (
+                                      <select
+                                        value={t.assigneeId ?? ""}
+                                        onChange={(e) => handleReassignTask(t.id, e.target.value)}
+                                        className="text-[10px] font-semibold text-foreground bg-transparent border border-border rounded-lg px-2 py-1 cursor-pointer"
+                                      >
+                                        <option value="">Unassigned</option>
+                                        {staffUsers.map((s: any) => (
+                                          <option key={s.id} value={s.id}>{s.name}</option>
+                                        ))}
+                                      </select>
+                                    ) : t.assignee ? (
                                       <span className="text-[10px] font-semibold text-foreground">{t.assignee.name}</span>
                                     ) : (
                                       <span className="text-[10px] text-muted-foreground">Unassigned</span>
