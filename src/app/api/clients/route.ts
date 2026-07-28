@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { logActivity } from "@/lib/activityLog";
 
 // GET /api/clients - List clients (ADMIN: all, non-ADMIN: assigned only)
 export async function GET() {
@@ -100,6 +101,15 @@ export async function POST(request: Request) {
       },
     });
 
+    await logActivity({
+      clientId: newClient.id,
+      entityType: "CLIENT",
+      entityId: newClient.id,
+      action: "CLIENT_CREATED",
+      description: `Client ${newClient.firstName} ${newClient.lastName} (${newClient.fileNumber}) was registered`,
+      actorId: currentUser.id,
+    });
+
     return NextResponse.json({ client: newClient }, { status: 201 });
   } catch (error: any) {
     console.error("Create client error:", error);
@@ -149,6 +159,14 @@ export async function PATCH(request: Request) {
       );
     }
 
+    const existingClient = await prisma.client.findUnique({ where: { id: Number(id) } });
+    if (!existingClient) {
+      return NextResponse.json(
+        { error: "Client not found" },
+        { status: 404 }
+      );
+    }
+
     const updateData: any = {};
     if (firstName !== undefined) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
@@ -174,6 +192,28 @@ export async function PATCH(request: Request) {
       await prisma.application.updateMany({
         where: { clientId: Number(id) },
         data: { assignedStaffId: assignedStaffId || null },
+      });
+    }
+
+    if (assignedStaffId !== undefined && Number(assignedStaffId || 0) !== (existingClient.assignedStaffId || 0)) {
+      await logActivity({
+        clientId: updatedClient.id,
+        entityType: "CLIENT",
+        entityId: updatedClient.id,
+        action: "CLIENT_ASSIGNED",
+        description: updatedClient.assignedStaff
+          ? `Client assigned to ${updatedClient.assignedStaff.name}`
+          : "Client unassigned from staff",
+        actorId: currentUser.id,
+      });
+    } else {
+      await logActivity({
+        clientId: updatedClient.id,
+        entityType: "CLIENT",
+        entityId: updatedClient.id,
+        action: "CLIENT_UPDATED",
+        description: "Client profile details were updated",
+        actorId: currentUser.id,
       });
     }
 

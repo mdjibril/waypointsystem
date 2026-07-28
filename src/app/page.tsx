@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { 
   Users, 
   FileText, 
@@ -38,7 +39,8 @@ import {
   Receipt,
   RefreshCw,
   Download,
-  Send
+  Send,
+  Activity
 } from "lucide-react";
 import {
   DndContext,
@@ -232,6 +234,8 @@ export default function Home() {
   const [applicationDetailLoading, setApplicationDetailLoading] = useState(false);
   const [stageHistory, setStageHistory] = useState<any[]>([]);
   const [stageHistoryLoading, setStageHistoryLoading] = useState(false);
+  const [activityLog, setActivityLog] = useState<any[]>([]);
+  const [activityLogLoading, setActivityLogLoading] = useState(false);
   const [stageActionLoading, setStageActionLoading] = useState(false);
   const [stageActionError, setStageActionError] = useState<string | null>(null);
 
@@ -405,10 +409,32 @@ export default function Home() {
       if (tasksRes.ok) {
         setTasks(tasksData.tasks);
       }
+      fetchActivityLog(clientId);
     } catch (err) {
       console.error("Failed to load client profile:", err);
     } finally {
       setClientProfileLoading(false);
+    }
+  };
+
+  const fetchActivityLog = async (clientId: number) => {
+    setActivityLogLoading(true);
+    try {
+      const res = await fetch(`/api/activity-log?clientId=${clientId}`);
+      const data = await res.json();
+      if (res.ok) setActivityLog(data.activity);
+    } catch (err) {
+      console.error("Failed to load activity log:", err);
+    } finally {
+      setActivityLogLoading(false);
+    }
+  };
+
+  // Notification links look like "clients:<id>" or "clients:<id>:task:<id>"
+  const handleNotificationNavigate = (link: string) => {
+    const match = link.match(/^clients:(\d+)/);
+    if (match) {
+      viewClientProfile(Number(match[1]));
     }
   };
 
@@ -1551,7 +1577,7 @@ export default function Home() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen bg-muted/10">
-        <Topbar currentTab={currentTab} />
+        <Topbar currentTab={currentTab} onNavigate={handleNotificationNavigate} />
 
         {/* Scrollable container for tab contents */}
         <main className="flex-1 p-8 overflow-y-auto">
@@ -2151,7 +2177,7 @@ export default function Home() {
             <div className="space-y-6 animate-in fade-in duration-200">
               {/* Back Button */}
               <button
-                onClick={() => setSelectedClient(null)}
+                onClick={() => { setSelectedClient(null); setActivityLog([]); }}
                 className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-xs font-semibold transition-colors cursor-pointer"
               >
                 <ArrowLeft className="h-4 w-4" /> Back to Client List
@@ -2440,13 +2466,49 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Activity Timeline */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary" /> Recent Activity
+                </h4>
+                {activityLogLoading ? (
+                  <div className="py-8 flex justify-center items-center">
+                    <div className="h-6 w-6 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : activityLog.length === 0 ? (
+                  <EmptyState
+                    icon={<Activity className="h-6 w-6" />}
+                    title="No activity yet"
+                    description="Actions taken on this client, their applications, tasks, documents, and payments will show up here."
+                  />
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {activityLog.map((entry: any) => (
+                      <div key={entry.id} className="flex items-start gap-3 p-3 bg-muted/20 rounded-xl">
+                        <div className="h-2 w-2 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">{entry.description}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {entry.actor?.name || "Unknown"} · {new Date(entry.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Client Tasks */}
               <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
                 <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
                   <CheckSquare className="h-4 w-4 text-primary" /> Tasks
                 </h4>
                 {tasks.filter((t: any) => t.clientId === selectedClient.id).length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No tasks for this client</p>
+                  <EmptyState
+                    icon={<CheckSquare className="h-6 w-6" />}
+                    title="No tasks for this client"
+                    description="Tasks assigned for this client will appear here."
+                  />
                 ) : (
                   <div className="space-y-2">
                     {tasks.filter((t: any) => t.clientId === selectedClient.id).map((t: any) => (
@@ -2485,7 +2547,11 @@ export default function Home() {
                   <CreditCard className="h-4 w-4 text-primary" /> Payments
                 </h4>
                 {payments.filter((p: any) => p.clientId === selectedClient.id).length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No payments recorded for this client</p>
+                  <EmptyState
+                    icon={<CreditCard className="h-6 w-6" />}
+                    title="No payments recorded for this client"
+                    description="Invoices and payments recorded for this client will appear here."
+                  />
                 ) : (
                   <>
                     <div className="space-y-2 mb-4">
@@ -2920,7 +2986,11 @@ export default function Home() {
                   <CreditCard className="h-4 w-4 text-primary" /> Payments
                 </h4>
                 {payments.filter((p: any) => p.applicationId === selectedApplication.id).length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No payments recorded for this application</p>
+                  <EmptyState
+                    icon={<CreditCard className="h-6 w-6" />}
+                    title="No payments recorded for this application"
+                    description="Invoices and payments tied to this application will appear here."
+                  />
                 ) : (
                   <>
                     <div className="space-y-2 mb-4">
@@ -2970,7 +3040,11 @@ export default function Home() {
                 {qualityReviewsLoading ? (
                   <div className="py-8 flex justify-center"><div className="h-6 w-6 border-3 border-primary border-t-transparent rounded-full animate-spin"></div></div>
                 ) : qualityReviews.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No quality reviews requested yet</p>
+                  <EmptyState
+                    icon={<FileCheck2 className="h-6 w-6" />}
+                    title="No quality reviews requested yet"
+                    description="Once a review is requested for this application, it will show up here."
+                  />
                 ) : (
                   <div className="space-y-2">
                     {qualityReviews.map((r: any) => (
@@ -3070,7 +3144,11 @@ export default function Home() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No submission details recorded yet</p>
+                  <EmptyState
+                    icon={<Send className="h-6 w-6" />}
+                    title="No submission details recorded yet"
+                    description="Once this application is submitted, its reference and portal details will show up here."
+                  />
                 )}
               </div>
 
@@ -3117,7 +3195,11 @@ export default function Home() {
                   </button>
                 </form>
                 {trackingUpdates.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-4 text-center">No tracking updates yet</p>
+                  <EmptyState
+                    icon={<RefreshCw className="h-6 w-6" />}
+                    title="No tracking updates yet"
+                    description="Status updates posted while this application is with the visa authority will show up here."
+                  />
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {trackingUpdates.map((u: any) => (

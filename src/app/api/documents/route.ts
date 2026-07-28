@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { logActivity } from "@/lib/activityLog";
 
 // GET /api/documents - List documents (ADMIN: all, STAFF: assigned clients only)
 export async function GET() {
@@ -78,11 +79,23 @@ export async function POST(request: Request) {
       },
       include: {
         client: { select: { id: true, fileNumber: true, firstName: true, lastName: true } },
-        application: { select: { id: true, serviceType: true, currentStage: true } },
+        application: { select: { id: true, serviceType: true, currentStage: true, clientId: true } },
         uploadedBy: { select: { id: true, name: true, email: true } },
         verifiedBy: { select: { id: true, name: true, email: true } },
       },
     });
+
+    const logClientId = document.clientId ?? document.application?.clientId;
+    if (logClientId) {
+      await logActivity({
+        clientId: logClientId,
+        entityType: "DOCUMENT",
+        entityId: document.id,
+        action: "DOCUMENT_UPLOADED",
+        description: `Document "${document.fileName}" (${document.documentType}) was uploaded`,
+        actorId: currentUser.id,
+      });
+    }
 
     return NextResponse.json({ document }, { status: 201 });
   } catch (error: any) {
@@ -135,11 +148,23 @@ export async function PATCH(request: Request) {
       data: updateData,
       include: {
         client: { select: { id: true, fileNumber: true, firstName: true, lastName: true } },
-        application: { select: { id: true, serviceType: true, currentStage: true } },
+        application: { select: { id: true, serviceType: true, currentStage: true, clientId: true } },
         uploadedBy: { select: { id: true, name: true, email: true } },
         verifiedBy: { select: { id: true, name: true, email: true } },
       },
     });
+
+    const logClientId = document.clientId ?? document.application?.clientId;
+    if (logClientId && (status === "VERIFIED" || status === "REJECTED")) {
+      await logActivity({
+        clientId: logClientId,
+        entityType: "DOCUMENT",
+        entityId: document.id,
+        action: status === "VERIFIED" ? "DOCUMENT_VERIFIED" : "DOCUMENT_REJECTED",
+        description: `Document "${document.fileName}" was ${status === "VERIFIED" ? "verified" : "rejected"}`,
+        actorId: currentUser.id,
+      });
+    }
 
     return NextResponse.json({ document });
   } catch (error: any) {

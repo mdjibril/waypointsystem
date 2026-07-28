@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { logActivity } from "@/lib/activityLog";
 
 // GET /api/applications - List applications (ADMIN: all, non-ADMIN: assigned clients only)
 export async function GET() {
@@ -97,6 +98,15 @@ export async function POST(request: Request) {
       },
     });
 
+    await logActivity({
+      clientId: newApplication.clientId,
+      entityType: "APPLICATION",
+      entityId: newApplication.id,
+      action: "APPLICATION_CREATED",
+      description: `Application for ${newApplication.serviceType} to ${newApplication.destinationCountry} was created`,
+      actorId: currentUser.id,
+    });
+
     return NextResponse.json({ application: newApplication }, { status: 201 });
   } catch (error: any) {
     console.error("Create application error:", error);
@@ -145,6 +155,14 @@ export async function PATCH(request: Request) {
       );
     }
 
+    const existingApplication = await prisma.application.findUnique({ where: { id: Number(id) } });
+    if (!existingApplication) {
+      return NextResponse.json(
+        { error: "Application not found" },
+        { status: 404 }
+      );
+    }
+
     const updateData: any = {};
     if (serviceType !== undefined) updateData.serviceType = serviceType;
     if (destinationCountry !== undefined) updateData.destinationCountry = destinationCountry;
@@ -162,6 +180,17 @@ export async function PATCH(request: Request) {
         client: { select: { id: true, fileNumber: true, firstName: true, lastName: true } },
         assignedStaff: { select: { id: true, name: true, email: true } },
       },
+    });
+
+    await logActivity({
+      clientId: updatedApplication.clientId,
+      entityType: "APPLICATION",
+      entityId: updatedApplication.id,
+      action: currentStage !== undefined && currentStage !== existingApplication.currentStage ? "STAGE_CHANGED" : "APPLICATION_UPDATED",
+      description: currentStage !== undefined && currentStage !== existingApplication.currentStage
+        ? `Application moved to ${currentStage}`
+        : "Application details were updated",
+      actorId: currentUser.id,
     });
 
     return NextResponse.json({ application: updatedApplication });

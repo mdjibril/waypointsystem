@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { logActivity } from "@/lib/activityLog";
+import { createNotification } from "@/lib/notifications";
 
 // GET /api/tasks - List tasks (ADMIN: all, STAFF: assigned only)
 export async function GET() {
@@ -95,6 +97,25 @@ export async function POST(request: Request) {
       },
     });
 
+    await logActivity({
+      clientId: task.clientId,
+      entityType: "TASK",
+      entityId: task.id,
+      action: "TASK_CREATED",
+      description: `Task "${task.title}" was created${task.assignee ? ` and assigned to ${task.assignee.name}` : ""}`,
+      actorId: currentUser.id,
+    });
+
+    if (task.assigneeId && task.assigneeId !== currentUser.id) {
+      await createNotification({
+        userId: task.assigneeId,
+        type: "TASK_ASSIGNED",
+        title: "New task assigned",
+        message: `"${task.title}" was assigned to you by ${currentUser.name}.`,
+        link: `clients:${task.clientId}:task:${task.id}`,
+      });
+    }
+
     return NextResponse.json({ task }, { status: 201 });
   } catch (error: any) {
     console.error("Create task error:", error);
@@ -171,6 +192,47 @@ export async function PATCH(request: Request) {
         assignedBy: { select: { id: true, name: true, email: true } },
       },
     });
+
+    const assigneeChanged = assigneeId !== undefined && updatedTask.assigneeId !== existingTask.assigneeId;
+
+    if (assigneeChanged && updatedTask.assigneeId) {
+      await logActivity({
+        clientId: updatedTask.clientId,
+        entityType: "TASK",
+        entityId: updatedTask.id,
+        action: "TASK_ASSIGNED",
+        description: `Task "${updatedTask.title}" was assigned to ${updatedTask.assignee?.name}`,
+        actorId: currentUser.id,
+      });
+
+      if (updatedTask.assigneeId !== currentUser.id) {
+        await createNotification({
+          userId: updatedTask.assigneeId,
+          type: "TASK_ASSIGNED",
+          title: "New task assigned",
+          message: `"${updatedTask.title}" was assigned to you by ${currentUser.name}.`,
+          link: `clients:${updatedTask.clientId}:task:${updatedTask.id}`,
+        });
+      }
+    } else if (status === "DONE" && existingTask.status !== "DONE") {
+      await logActivity({
+        clientId: updatedTask.clientId,
+        entityType: "TASK",
+        entityId: updatedTask.id,
+        action: "TASK_COMPLETED",
+        description: `Task "${updatedTask.title}" was marked complete`,
+        actorId: currentUser.id,
+      });
+    } else {
+      await logActivity({
+        clientId: updatedTask.clientId,
+        entityType: "TASK",
+        entityId: updatedTask.id,
+        action: "TASK_UPDATED",
+        description: `Task "${updatedTask.title}" was updated`,
+        actorId: currentUser.id,
+      });
+    }
 
     return NextResponse.json({ task: updatedTask });
   } catch (error: any) {
