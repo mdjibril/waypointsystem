@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { canAccessClient } from "@/lib/permissions";
 
 // GET /api/activity-log?clientId=NN - Activity timeline for a client (ADMIN, or assigned staff)
 export async function GET(request: Request) {
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
       );
     }
 
-    if (currentUser.role !== "ADMIN" && client.assignedStaffId !== currentUser.id) {
+    if (!canAccessClient(currentUser.role, client.assignedStaffId, currentUser.id)) {
       return NextResponse.json(
         { error: "You do not have access to this client" },
         { status: 403 }

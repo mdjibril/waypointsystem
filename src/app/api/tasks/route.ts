@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 import { logActivity } from "@/lib/activityLog";
 import { createNotification } from "@/lib/notifications";
+import { canCreateTask, canUpdateTask, isAdmin } from "@/lib/permissions";
 
 // GET /api/tasks - List tasks (ADMIN: all, STAFF: assigned only)
 export async function GET() {
@@ -15,7 +16,7 @@ export async function GET() {
 
     const where: any = {};
 
-    if (currentUser.role !== "ADMIN") {
+    if (!isAdmin(currentUser.role)) {
       where.assigneeId = currentUser.id;
     }
 
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (currentUser.role !== "ADMIN") {
+    if (!canCreateTask(currentUser.role)) {
       return NextResponse.json(
         { error: "Only administrators can create tasks" },
         { status: 403 }
@@ -159,7 +160,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    if (currentUser.role !== "ADMIN" && existingTask.assigneeId !== currentUser.id) {
+    if (!canUpdateTask(currentUser.role, existingTask.assigneeId, currentUser.id)) {
       return NextResponse.json(
         { error: "You do not have permission to update this task" },
         { status: 403 }

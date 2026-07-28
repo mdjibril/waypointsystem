@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 import { logActivity } from "@/lib/activityLog";
+import { canManageClients, isAdmin } from "@/lib/permissions";
 
 // GET /api/clients - List clients (ADMIN: all, non-ADMIN: assigned only)
 export async function GET() {
@@ -14,7 +15,7 @@ export async function GET() {
 
     const where: any = {};
 
-    if (currentUser.role !== "ADMIN") {
+    if (!isAdmin(currentUser.role)) {
       where.assignedStaffId = currentUser.id;
     }
 
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (currentUser.role !== "ADMIN") {
+    if (!canManageClients(currentUser.role)) {
       return NextResponse.json(
         { error: "Only administrators can create clients" },
         { status: 403 }
@@ -132,7 +133,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    if (currentUser.role !== "ADMIN") {
+    if (!canManageClients(currentUser.role)) {
       return NextResponse.json(
         { error: "Only administrators can update clients" },
         { status: 403 }
