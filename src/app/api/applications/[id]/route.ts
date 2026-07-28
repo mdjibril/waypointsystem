@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { canAccessClient } from "@/lib/permissions";
 
 // GET /api/applications/[id] - Fetch a single application (ADMIN: any, non-ADMIN: assigned clients only)
 export async function GET(
@@ -34,7 +35,7 @@ export async function GET(
       );
     }
 
-    if (currentUser.role !== "ADMIN" && application.client.assignedStaffId !== currentUser.id) {
+    if (!canAccessClient(currentUser.role, application.client.assignedStaffId, currentUser.id)) {
       return NextResponse.json(
         { error: "You do not have access to this application" },
         { status: 403 }

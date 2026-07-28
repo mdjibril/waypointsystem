@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { canDecideQualityReview } from "@/lib/permissions";
 
 // GET /api/quality-reviews - List reviews
 export async function GET(request: Request) {
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const currentUser = await getCurrentUserFromCookies();
-    if (!currentUser || currentUser.role !== "ADMIN") {
+    if (!currentUser || !canDecideQualityReview(currentUser.role)) {
       return NextResponse.json({ error: "Only admins can decide reviews" }, { status: 403 });
     }
 

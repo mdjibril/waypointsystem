@@ -5,6 +5,7 @@ import { isValidTransition, stageForDecision, DecisionOutcome, TERMINAL_STAGES, 
 import { WorkflowStage } from "@/types";
 import { logActivity } from "@/lib/activityLog";
 import { createNotification } from "@/lib/notifications";
+import { canAccessClient, canTransitionApplication } from "@/lib/permissions";
 
 // GET /api/applications/[id]/stage - Stage history for an application
 export async function GET(
@@ -35,7 +36,7 @@ export async function GET(
       );
     }
 
-    if (currentUser.role !== "ADMIN" && application.client.assignedStaffId !== currentUser.id) {
+    if (!canAccessClient(currentUser.role, application.client.assignedStaffId, currentUser.id)) {
       return NextResponse.json(
         { error: "You do not have access to this application" },
         { status: 403 }
@@ -95,7 +96,7 @@ export async function POST(
       );
     }
 
-    if (currentUser.role !== "ADMIN" && application.client.assignedStaffId !== currentUser.id) {
+    if (!canTransitionApplication(currentUser.role, application.client.assignedStaffId, currentUser.id)) {
       return NextResponse.json(
         { error: "You do not have permission to move this application" },
         { status: 403 }

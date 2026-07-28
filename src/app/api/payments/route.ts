@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 import { logActivity } from "@/lib/activityLog";
 import { formatAmount } from "@/lib/currency";
+import { canConfirmPayment, canRecordPayment, isAdmin } from "@/lib/permissions";
 
 // GET /api/payments - List payments (ADMIN: all, STAFF: assigned clients only)
 export async function GET() {
@@ -15,7 +16,7 @@ export async function GET() {
 
     const where: any = {};
 
-    if (currentUser.role !== "ADMIN") {
+    if (!isAdmin(currentUser.role)) {
       where.client = {
         assignedStaffId: currentUser.id,
       };
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (currentUser.role !== "ADMIN" && client.assignedStaffId !== currentUser.id) {
+    if (!canRecordPayment(currentUser.role, client.assignedStaffId, currentUser.id)) {
       return NextResponse.json(
         { error: "You can only record payments for your assigned clients" },
         { status: 403 }
@@ -144,7 +145,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    if (currentUser.role !== "ADMIN") {
+    if (!canConfirmPayment(currentUser.role)) {
       return NextResponse.json(
         { error: "Only administrators can confirm payments" },
         { status: 403 }
