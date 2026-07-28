@@ -1568,6 +1568,273 @@ After completing all steps above, verify:
 
 ---
 
+## Manual Walkthrough: Inquiry → Decision (Hands-On)
+
+This is a step-by-step manual test where you create a brand new client and walk them through every pipeline stage from CLIENT_INQUIRY to DECISION. No pre-seeded data required — you build everything yourself, which verifies that every part of the system works from scratch.
+
+**Prerequisites:** Dev server running (`npm run dev`), logged in as admin (`admin@waypoint.com` / `password123`).
+
+Also create a staff user if you don't already have one named "QA Staff" (`qastaff@waypoint.com`):
+
+1. Sidebar → **Staff Management** → **"Add Staff Member"**
+2. Full Name: `QA Staff`, Email: `qastaff@waypoint.com`, Role: `Staff`
+3. Click **"Create Account"** — success.
+
+---
+
+### Stage 1 — CLIENT_INQUIRY (Register the client)
+
+A new client, Grace Emmanuel, walks into the office inquiring about a Canada Study Permit.
+
+1. Navigate to **Clients** tab.
+2. Click **"Register Client"**.
+3. Fill in:
+   - First Name: `Grace`
+   - Last Name: `Emmanuel`
+   - Email: `grace.emmanuel@example.com`
+   - Phone: `+2348023456789`
+   - Address: `42 Aminu Kano Crescent, Wuse 2, Abuja`
+   - Passport Number: `C12345678`
+   - Date of Birth: `1998-03-22`
+   - Source: `Website`
+   - Assign Staff: `QA Staff`
+4. Click **"Register Client"** — success message: "Client registered successfully! File number: WP-2026-XXXX".
+5. The new client row shows in the table. Note the **file number** (you'll use it later).
+
+✅ **Verify:** Grace Emmanuel appears in the client list. She has no application yet.
+
+---
+
+### Stage 2 — Create the Application (CLIENT_INQUIRY → CUSTOMER_SERVICE_REGISTRATION)
+
+1. On the Clients tab, find Grace Emmanuel, click **"View File"** — client profile opens.
+2. In the Applications section, click the green **"+"** button (or **"Create Application"**).
+3. Fill in:
+   - Service Type: `Canada Study Permit` (or any available service type)
+   - Destination Country: `Canada`
+   - Travel Purpose: `Study / Education`
+   - Expected Travel Date: pick a date 3 months from today
+   - Assign Staff: `QA Staff`
+4. Click **"Create Application"** — success message.
+5. The application card appears showing:
+   - Service type badge
+   - Stage: `Client Inquiry`
+   - Status: `NOT_STARTED`
+
+✅ **Verify:** Application exists at CLIENT_INQUIRY stage. Stage history has one entry: `null → CLIENT_INQUIRY`.
+
+Now advance to **CUSTOMER_SERVICE_REGISTRATION**:
+
+1. Click the application card to open the detail view.
+2. Click the stage dropdown in the header (next to the current stage badge).
+3. Select **"Customer Service Registration"**.
+4. Stage badge updates. Status changes to `IN_PROGRESS`.
+
+✅ **Verify:** Stage history now shows two entries: `null → CLIENT_INQUIRY` and `CLIENT_INQUIRY → CUSTOMER_SERVICE_REGISTRATION`.
+
+---
+
+### Stage 3 — INITIAL_CONSULTATION
+
+1. From the application detail, click stage dropdown → **"Initial Consultation"**.
+2. Stage badge updates.
+
+✅ **Verify:** Stage history has the new transition. This is now stage 3 of 12.
+
+---
+
+### Stage 4 — PAYMENT & SERVICE AGREEMENT
+
+1. Stage dropdown → **"Payment & Service Agreement"**.
+
+Now you need a payment record and a task for this stage:
+
+**Create a task:**
+
+1. Navigate to **Tasks** tab → **"Create Task"**.
+2. Fill in:
+   - Title: `Prepare service agreement for Grace Emmanuel`
+   - Client: `Grace Emmanuel`
+   - Application: select the Canada Study Permit application
+   - Stage: `Payment & Service Agreement`
+   - Assignee: `QA Staff`
+   - Priority: `HIGH`
+3. Click **"Create Task"** — success.
+
+**Record a payment:**
+
+1. Navigate to **Payments** tab → **"Record Payment"**.
+2. Fill in:
+   - Client: `Grace Emmanuel`
+   - Amount: `250000`
+   - Currency: `NGN`
+   - Method: `Bank Transfer`
+3. Click **"Record Payment"** — invoice number is auto-generated.
+4. The new payment appears with `PENDING` status.
+5. Click **"✓ Confirm"** on the payment row — badge changes to green `CONFIRMED`.
+
+✅ **Verify:** Return to Grace's application detail — the Payments card shows ₦250,000.00 confirmed.
+
+---
+
+### Stage 5 — DOCUMENT COLLECTION & VERIFICATION
+
+1. Stage dropdown → **"Document Collection & Verification"**.
+
+**Upload documents:**
+
+1. Navigate to **Documents** tab → **"Upload File"**.
+2. Fill in:
+   - Document Type: `Passport` (from the templates dropdown)
+   - Client: `Grace Emmanuel`
+   - File Name: `grace_emmanuel_passport.pdf`
+   - File Upload: choose any local file (PDF or image)
+3. Click **"Record Document"** — success.
+4. Repeat for a second document:
+   - Document Type: `Bank Statements`
+   - File Name: `grace_emmanuel_bank_statement.pdf`
+   - Choose another file.
+5. Click **"Record Document"** — success.
+
+**Verify documents:**
+
+1. In the Documents tab, both documents show status `PENDING` (yellow badge).
+2. Click **"✓ Verify"** on the first document — badge changes to green `VERIFIED`.
+3. Click **"✓ Verify"** on the second document.
+4. Return to **Dashboard** — "Documents Pending Review" should be 0.
+
+✅ **Verify:** Both documents show as VERIFIED. Dashboard pending review count is 0.
+
+---
+
+### Stage 6 — VISA PROCESSING
+
+1. Stage dropdown → **"Visa Processing"**.
+
+**Create processing tasks:**
+
+1. Navigate to **Tasks** → **"Create Task"** → Title: `Review passport and supporting docs`, Client: `Grace Emmanuel`, Stage: `Visa Processing`, Assignee: `QA Staff`, Priority: `HIGH`, click "Create Task".
+2. **"Create Task"** → Title: `Prepare cover letter`, Client: `Grace Emmanuel`, Stage: `Visa Processing`, Assignee: `QA Staff`, Priority: `MEDIUM`, click "Create Task".
+
+**Complete the tasks:**
+
+1. In the Tasks table, find both tasks.
+2. Change the status of each to **"Done"** using the status dropdown in each row.
+
+✅ **Verify:** Tasks disappear from the "High-Priority Tasks" dashboard panel. Status shows DONE with green badge and completedAt timestamp.
+
+---
+
+### Stage 7 — QUALITY REVIEW
+
+1. Stage dropdown → **"Quality Review"**.
+
+**Request and approve a quality review:**
+
+1. On the application detail, scroll down to the **Quality Review** panel (below Payments).
+2. Click **"Request Review"** — a PENDING review entry appears with your name as reviewer.
+3. Click **"✓ Approve"** on the PENDING review.
+4. Badge changes to green `APPROVED`. Decision buttons disappear.
+
+✅ **Verify:** Quality review shows status APPROVED. Application stage is now Quality Review.
+
+---
+
+### Stage 8 — APPLICATION SUBMISSION
+
+1. Stage dropdown → **"Application Submission"**.
+
+**Record submission details:**
+
+1. On the application detail, scroll to **Submission Details** panel (below Quality Review).
+2. Click **"Record Submission"**.
+3. Fill in:
+   - Reference Number: `CAN-STUDY-2026-000789`
+   - Submission Date: today's date (use the datetime picker)
+   - Biometrics Date: +2 weeks from today
+   - Portal: `VFS Global`
+   - Notes: `Documents submitted at VFS Abuja`
+4. Click **"Save Submission"**.
+
+✅ **Verify:** Submission panel shows reference number, dates, portal, and notes. The "Record Submission" button changes to "Edit Submission".
+
+---
+
+### Stage 9 — APPLICATION TRACKING
+
+1. Stage dropdown → **"Application Tracking"**.
+
+**Add tracking updates:**
+
+1. Scroll to **Application Tracking** panel (below Submission Details).
+2. Add Update 1:
+   - Status dropdown: `Submitted`
+   - Message: `Application received at VFS Abuja — forwarded to IRCC`
+   - Click **"Add"** — a timeline entry appears with a colored dot.
+3. Add Update 2:
+   - Status: `Under Review`
+   - Message: `Application is under review by the visa officer`
+   - Click **"Add"**.
+4. Add Update 3:
+   - Status: `Decision Made`
+   - Message: `Decision has been made. Awaiting passport collection.`
+   - Reference URL: `https://tracking.example.com/ref/CAN-STUDY-2026-000789`
+   - Click **"Add"**.
+5. Scroll through the timeline — entries appear newest-first with colored status dots.
+
+✅ **Verify:** Timeline shows 3 entries with timestamps. The "View Reference" link opens in a new tab.
+
+---
+
+### Stage 10 — DECISION (Approved Path)
+
+1. Stage dropdown → **"Decision"**.
+
+The Decision modal opens with outcome options.
+
+1. Select **"Approved"**.
+2. Note field: `Application approved — IRCC has issued the study permit.`
+3. Click **"Confirm Decision"**.
+
+✅ **Verify:**
+
+- Application moves to **VISA_APPROVED_PATH** stage.
+- Status changes to `COMPLETED`.
+- Stage history shows the full path: CLIENT_INQUIRY → ... → APPLICATION_TRACKING → DECISION → VISA_APPROVED_PATH.
+- Dashboard Decision Outcomes panel now counts this approved application.
+- Reports → Visa Approval Rates by Destination reflects the new approved application for Canada.
+
+---
+
+### Post-Walkthrough Verification
+
+1. **Activity Log:** Open Grace Emmanuel's client profile — the activity timeline shows every action:
+   - Client created, application created
+   - 10 stage transitions with timestamps and actor
+   - Task creations and completions
+   - Payment recorded and confirmed
+   - Documents uploaded and verified
+   - Quality review requested and approved
+   - Submission details recorded
+   - Tracking updates added
+2. **Pipeline Board** (Applications tab): Grace's application card is in the VISA_APPROVED_PATH column.
+3. **Notifications**: Click the bell icon — notifications exist for task assignments.
+
+---
+
+### Test the REFUSED Path (Bonus)
+
+Repeat the walkthrough with a second client to verify the REFUSED path:
+
+1. Register a new client: **James Okonkwo**, email `james.okonkwo@example.com`, assign to QA Staff.
+2. Create a UK Tourist Visa application.
+3. Fast-track through stages 2-9 (each stage move via the dropdown, no need for tasks/payments/documents this time).
+4. At DECISION stage, select **"Refused"** → confirm.
+5. Verify: Application moves to **VISA_REFUSED_PATH**. Status is COMPLETED.
+6. Reports now show both an approved and a refused application.
+
+---
+
 ## Task 6 — Fix final bugs from QA
 
 ### Test Steps
