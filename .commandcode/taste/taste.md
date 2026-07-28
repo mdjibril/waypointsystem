@@ -13,6 +13,7 @@
 
 # testing
 - Prefer UI-based test steps over CLI/curl-based test steps in test plans. Confidence: 0.60
+- In test.md, include a manual step-by-step walkthrough from inquiry to decision (register client, create application, move through all pipeline stages) that a tester can follow hands-on, even when seeded data verification steps also exist. Confidence: 0.70
 
 # database
 - Use a shared pg.Pool (max 5) with the PrismaPg adapter instead of passing a raw connection string, to avoid exhausting Supabase's 15-connection session pool limit. Confidence: 0.70
