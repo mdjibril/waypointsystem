@@ -940,6 +940,21 @@ export default function Home() {
     }
   };
 
+  const handleDeleteStaff = async (userId: number, userName: string) => {
+    if (!confirm(`Delete ${userName}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/staff?userId=${userId}`, { method: "DELETE" });
+      if (res.ok) {
+        fetchStaff();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete staff member.");
+      }
+    } catch (err) {
+      console.error("Failed to delete staff:", err);
+    }
+  };
+
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -4884,6 +4899,12 @@ export default function Home() {
                                 }`}
                               >
                                 {member.status === "active" ? "Deactivate" : "Activate"}
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteStaff(member.id, member.name)}
+                                className="text-[10px] bg-red-500/10 text-red-600 border border-red-500/20 font-bold px-2 py-1 rounded-lg hover:bg-red-500/20 transition-all cursor-pointer"
+                              >
+                                Delete
                               </button>
                             </td>
                           </tr>
