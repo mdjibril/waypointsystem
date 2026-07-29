@@ -148,6 +148,7 @@ function outstandingByCurrency(paymentsList: any[]): { currency: string; total: 
 export default function Home() {
   const { user, login, logout, isAuthenticated, loginError } = useAuth();
   const [currentTab, setCurrentTab] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1458,7 +1459,7 @@ export default function Home() {
         <div className="absolute -left-48 -bottom-48 w-96 h-96 rounded-full bg-primary/10 blur-3xl pointer-events-none"></div>
 
         {/* Brand Left Panel */}
-        <div className="flex-1 flex flex-col justify-between p-10 md:p-16 bg-gradient-to-br from-card to-background border-r border-border relative">
+        <div className="hidden md:flex flex-1 flex-col justify-between p-10 md:p-16 bg-gradient-to-br from-card to-background border-r border-border relative">
           <div className="flex items-center gap-3">
             <div className="bg-primary p-2.5 rounded-xl text-primary-foreground">
               <Plus className="h-6 w-6 transform rotate-45" />
@@ -1500,8 +1501,19 @@ export default function Home() {
         </div>
 
         {/* Login Right Panel */}
-        <div className="flex-1 flex items-center justify-center p-8 md:p-16">
-          <div className="w-full max-w-md bg-card/60 backdrop-blur-md border border-border/80 rounded-3xl p-8 md:p-10 shadow-xl shadow-foreground/5 transition-all">
+        <div className="flex-1 flex items-center justify-center p-4 sm:p-8 md:p-16">
+          <div className="w-full max-w-md bg-card/60 backdrop-blur-md border border-border/80 rounded-3xl p-6 sm:p-8 md:p-10 shadow-xl shadow-foreground/5 transition-all">
+            {/* Mobile branding */}
+            <div className="flex items-center justify-center gap-3 mb-6 md:hidden">
+              <div className="bg-primary p-2.5 rounded-xl text-primary-foreground">
+                <Plus className="h-6 w-6 transform rotate-45" />
+              </div>
+              <div>
+                <h1 className="font-extrabold text-lg leading-none tracking-tight text-foreground">WAY POINT</h1>
+                <span className="text-[10px] text-muted-foreground font-semibold tracking-widest uppercase">Travel Ltd</span>
+              </div>
+            </div>
+
             <div className="text-center md:text-left mb-8">
               <h3 className="text-2xl font-bold text-foreground">Staff Portal</h3>
               <p className="text-sm text-muted-foreground mt-1">Sign in with your assigned credentials to start working.</p>
@@ -1513,41 +1525,6 @@ export default function Home() {
                   {loginError}
                 </div>
               )}
-
-              {/* Demo Accounts helper */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Demo Accounts</label>
-                <div className="grid grid-cols-2 gap-2 bg-muted/40 p-1.5 rounded-xl border border-border">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail("admin@waypoint.com");
-                      setPassword("password123");
-                    }}
-                    className={`py-2 rounded-lg text-xs font-bold transition-all ${
-                      email === "admin@waypoint.com" 
-                        ? "bg-card text-foreground shadow-sm" 
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Admin Profile
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail("staff@waypoint.com");
-                      setPassword("password123");
-                    }}
-                    className={`py-2 rounded-lg text-xs font-bold transition-all ${
-                      email === "staff@waypoint.com" 
-                        ? "bg-card text-foreground shadow-sm" 
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Staff Profile
-                  </button>
-                </div>
-              </div>
 
               {/* Email Input */}
               <div className="space-y-1">
@@ -1565,7 +1542,7 @@ export default function Home() {
 
               {/* Password Input */}
               <div className="space-y-1">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <label className="text-xs font-semibold text-muted-foreground" htmlFor="password">Password</label>
                   <a href="#" className="text-xs text-primary hover:underline font-semibold">Forgot?</a>
                 </div>
@@ -1605,20 +1582,29 @@ export default function Home() {
   return (
     <div className="min-h-screen flex bg-background font-sans text-foreground">
       {/* Shared Sidebar */}
-      <Sidebar currentTab={currentTab} setCurrentTab={setCurrentTab} />
+      <Sidebar
+        currentTab={currentTab}
+        setCurrentTab={setCurrentTab}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen bg-muted/10">
-        <Topbar currentTab={currentTab} onNavigate={handleNotificationNavigate} />
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen bg-muted/10 lg:ml-0">
+        <Topbar
+          currentTab={currentTab}
+          onNavigate={handleNotificationNavigate}
+          onMenuClick={() => setSidebarOpen(true)}
+        />
 
         {/* Scrollable container for tab contents */}
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
           {currentTab === "dashboard" && (
-            <div className="space-y-8 animate-in fade-in duration-200">
+            <div className="space-y-6 md:space-y-8 animate-in fade-in duration-200">
               {/* Header Greeting */}
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
-                  <h3 className="text-xl font-extrabold text-foreground">Welcome back, {user?.name}!</h3>
+                  <h3 className="text-lg md:text-xl font-extrabold text-foreground">Welcome back, {user?.name}!</h3>
                   <p className="text-xs text-muted-foreground">
                     {user?.role === "ADMIN" ? "Full platform overview and performance metrics." : "Your assigned clients and tasks at a glance."}
                   </p>
@@ -1629,7 +1615,7 @@ export default function Home() {
               </div>
 
               {/* Status Metric Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 lg:gap-6">
                 <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
                   <div className="flex justify-between items-start">
                     <div className="bg-blue-500/10 p-2.5 rounded-xl text-blue-500">
@@ -1692,8 +1678,8 @@ export default function Home() {
               </div>
 
               {/* Pipeline Chart + Decision Outcomes */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                <div className="xl:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+                <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <h4 className="font-bold text-sm text-foreground mb-4">Pipeline Overview</h4>
                   <div className="space-y-2.5">
                     {STAGE_ORDER.slice(0, 10).map((stage) => {
@@ -1756,8 +1742,8 @@ export default function Home() {
               </div>
 
               {/* Staff Workload + Tasks */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                <div className="xl:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+                <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <h4 className="font-bold text-sm text-foreground mb-4">Staff Workload Distribution</h4>
                   {(() => {
                     const workload: Record<string, number> = {};
@@ -1875,7 +1861,7 @@ export default function Home() {
                   <h3 className="text-lg font-bold text-foreground">Client Records</h3>
                   <p className="text-xs text-muted-foreground">Manage and filter client files and travel history.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                   {user?.role === "ADMIN" && (
                   <button
                     onClick={() => {
@@ -1971,7 +1957,7 @@ export default function Home() {
                         </div>
                       )}
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">First Name *</label>
                           <input
@@ -1996,7 +1982,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Email *</label>
                           <input
@@ -2032,7 +2018,7 @@ export default function Home() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Passport Number</label>
                           <input
@@ -2054,7 +2040,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Source *</label>
                           <select
@@ -2276,7 +2262,7 @@ export default function Home() {
                         </div>
                       )}
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">First Name *</label>
                           <input
@@ -2299,7 +2285,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Email *</label>
                           <input
@@ -2332,7 +2318,7 @@ export default function Home() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Passport Number</label>
                           <input
@@ -2353,7 +2339,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Source *</label>
                           <select
@@ -2405,7 +2391,7 @@ export default function Home() {
               )}
 
               {/* Profile Details Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 {/* Contact Information */}
                 <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
@@ -2698,7 +2684,7 @@ export default function Home() {
                         </select>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Destination Country *</label>
                           <input
@@ -2731,7 +2717,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Expected Travel Date</label>
                           <input
@@ -2892,7 +2878,7 @@ export default function Home() {
               )}
 
               {/* Application Details Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
                     <FileText className="h-4 w-4 text-primary" /> Application Details
@@ -2934,7 +2920,7 @@ export default function Home() {
                   {!canTransitionApplication(selectedApplication) ? (
                     <p className="text-xs text-muted-foreground">You do not have permission to move this application.</p>
                   ) : selectedApplication.currentStage === "DECISION" ? (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button
                         disabled={stageActionLoading}
                         onClick={() => moveApplicationStage(selectedApplication.id, "VISA_APPROVED_PATH", "APPROVED")}
@@ -3313,7 +3299,7 @@ export default function Home() {
 
           {currentTab === "tasks" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                   <h3 className="text-lg font-bold text-foreground">Task Manager</h3>
                   <p className="text-xs text-muted-foreground">Assign, update, and track workload deliverables.</p>
@@ -3446,7 +3432,7 @@ export default function Home() {
                         </select>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Application</label>
                           <select
@@ -3481,7 +3467,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Assignee</label>
                           <select
@@ -3686,7 +3672,7 @@ export default function Home() {
 
           {currentTab === "documents" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                   <h3 className="text-lg font-bold text-foreground">Document Management</h3>
                   <p className="text-xs text-muted-foreground">Manage checklists and inspect uploaded client files.</p>
@@ -3893,7 +3879,7 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8">
                 {/* Templates panel */}
                 <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
                   <h4 className="font-bold text-xs text-foreground mb-3 uppercase tracking-wider">Checklist Templates</h4>
@@ -4032,7 +4018,7 @@ export default function Home() {
           {/* Payments */}
           {currentTab === "payments" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                   <h3 className="text-lg font-bold text-foreground">Invoicing & Payments</h3>
                   <p className="text-xs text-muted-foreground">Track transaction history, outstanding balances, and receipt validations.</p>
@@ -4121,7 +4107,7 @@ export default function Home() {
                             ))}
                         </select>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Amount *</label>
                           <input
@@ -4230,7 +4216,7 @@ export default function Home() {
                       </button>
                     </div>
 
-                    <div className="p-6 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                       {/* Form */}
                       <div className="space-y-4">
                         {receiptError && (
@@ -4308,7 +4294,7 @@ export default function Home() {
 
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-muted-foreground uppercase">Services</label>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {RECEIPT_SERVICE_OPTIONS.map((service) => (
                               <label key={service} className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
                                 <input
@@ -4323,7 +4309,7 @@ export default function Home() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                           <div className="space-y-1">
                             <label className="text-[11px] font-bold text-muted-foreground uppercase">Amount</label>
                             <input
@@ -4370,7 +4356,7 @@ export default function Home() {
                           </p>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                           <div className="space-y-1">
                             <label className="text-[11px] font-bold text-muted-foreground uppercase">Payment Method</label>
                             <select
@@ -4581,7 +4567,7 @@ export default function Home() {
               </div>
 
               {/* Approval Rates + Revenue */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
                 <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <h4 className="font-bold text-xs text-foreground mb-4">Visa Approval Rates By Destination</h4>
                   {(() => {
@@ -4647,7 +4633,7 @@ export default function Home() {
               </div>
 
               {/* Pipeline Bottleneck + Stage Duration */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
                 <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <h4 className="font-bold text-xs text-foreground mb-4">Pipeline Bottleneck Analysis</h4>
                   {(() => {
@@ -5080,7 +5066,7 @@ export default function Home() {
                     <label className="text-[11px] font-bold text-muted-foreground uppercase">Reference Number</label>
                     <input type="text" value={submissionForm.referenceNumber} onChange={(e) => setSubmissionForm({ ...submissionForm, referenceNumber: e.target.value })} placeholder="e.g. GWF123456789" className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground" />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                     <div className="space-y-1">
                       <label className="text-[11px] font-bold text-muted-foreground uppercase">Submission Date</label>
                       <input type="datetime-local" value={submissionForm.submittedAt} onChange={(e) => setSubmissionForm({ ...submissionForm, submittedAt: e.target.value })} className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground" />

@@ -11,7 +11,8 @@ import {
   AlertCircle,
   Clock,
   Workflow,
-  ClipboardList
+  ClipboardList,
+  Menu
 } from "lucide-react";
 import { useAuth } from "@/context";
 
@@ -28,6 +29,7 @@ interface NotificationItem {
 interface TopbarProps {
   currentTab: string;
   onNavigate?: (link: string) => void;
+  onMenuClick: () => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -48,7 +50,7 @@ function notificationIcon(type: string) {
   return <AlertCircle className="h-4.5 w-4.5 text-primary" />;
 }
 
-export function Topbar({ currentTab, onNavigate }: TopbarProps) {
+export function Topbar({ currentTab, onNavigate, onMenuClick }: TopbarProps) {
   const { user } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -125,15 +127,23 @@ export function Topbar({ currentTab, onNavigate }: TopbarProps) {
   };
 
   return (
-    <header className="h-16 bg-card border-b border-border flex items-center justify-between px-8 sticky top-0 z-40">
+    <header className="h-16 bg-card border-b border-border flex items-center justify-between px-4 md:px-8 sticky top-0 z-30">
       {/* Page Title & Breadcrumb */}
-      <div>
-        <h2 className="text-lg font-bold text-foreground">
-          {formatTabName(currentTab)}
-        </h2>
-        <p className="text-[11px] text-muted-foreground font-medium">
-          Home / {formatTabName(currentTab)}
-        </p>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-xl transition-all"
+        >
+          <Menu className="h-4.5 w-4.5" />
+        </button>
+        <div>
+          <h2 className="text-base md:text-lg font-bold text-foreground truncate max-w-[120px] sm:max-w-[200px]">
+            {formatTabName(currentTab)}
+          </h2>
+          <p className="text-[10px] md:text-[11px] text-muted-foreground font-medium">
+            Home / {formatTabName(currentTab)}
+          </p>
+        </div>
       </div>
 
       {/* Search & Actions */}

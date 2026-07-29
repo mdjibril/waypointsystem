@@ -1623,6 +1623,7 @@ A new client, Grace Emmanuel, walks into the office inquiring about a Canada Stu
 
 ✅ **Verify:** Application exists at CLIENT_INQUIRY stage. Stage history has one entry: `null → CLIENT_INQUIRY`.
 
+
 Now advance to **CUSTOMER_SERVICE_REGISTRATION**:
 
 1. Click the application card to open the detail view.
