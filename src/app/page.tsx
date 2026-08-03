@@ -1398,11 +1398,11 @@ export default function Home() {
     setReceiptNumber(generateReceiptNumber());
   };
 
-  const handleDownloadReceiptPdf = () => {
+  const handleDownloadReceiptPdf = async () => {
     if (!receiptNumber) return;
     const amount = Number(receiptAmount) || 0;
     const currency = getReceiptCurrency();
-    downloadReceiptPdf({
+    await downloadReceiptPdf({
       receiptNumber,
       date: receiptDate,
       name: getReceiptName(),
@@ -4438,31 +4438,44 @@ export default function Home() {
 
                       {/* Live Preview */}
                       <div className="bg-muted/10 border border-border rounded-2xl p-6">
-                        <div className="bg-white text-black rounded-xl p-6 shadow-sm text-xs space-y-3 min-h-full">
-                          <div className="text-center border-b border-gray-300 pb-3">
-                            <p className="font-extrabold text-sm">WAY POINT TRAVEL LTD</p>
-                            <p className="text-[10px] text-gray-500">Official Payment Receipt</p>
-                          </div>
-                          <div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
-                            <span className="break-all"><span className="font-bold">Receipt No:</span> {receiptNumber || "—"}</span>
-                            <span className="flex-shrink-0"><span className="font-bold">Date:</span> {receiptDate}</span>
-                          </div>
-                          <p><span className="font-bold">Received From:</span> {getReceiptName() || "—"}</p>
-                          <p><span className="font-bold">Services:</span> {receiptServices.length > 0 ? receiptServices.join(", ") : "—"}</p>
-                          <p>
-                            <span className="font-bold">Amount:</span>{" "}
-                            {Number(receiptAmount) > 0 ? formatAmount(Number(receiptAmount), getReceiptCurrency() || "NGN") : "—"}
-                          </p>
-                          <p className="italic">
-                            <span className="font-bold not-italic">Amount in Words:</span>{" "}
-                            {Number(receiptAmount) > 0 ? amountToWords(Number(receiptAmount), getReceiptCurrency() || "NGN") : "—"}
-                          </p>
-                          <p><span className="font-bold">Payment Method:</span> {receiptMethod || "—"}</p>
-                          {receiptDescription && <p><span className="font-bold">Description:</span> {receiptDescription}</p>}
-                          {receiptClientEmail && <p><span className="font-bold">Client Email:</span> {receiptClientEmail}</p>}
-                          <div className="pt-8">
-                            <div className="border-t border-gray-400 w-32"></div>
-                            <p className="text-[10px] text-gray-500 mt-1">Authorized Signature</p>
+                        <div className="relative overflow-hidden bg-white text-black rounded-xl p-8 shadow-sm text-sm min-h-full">
+                          <img
+                            src="/company-noBG.png"
+                            alt=""
+                            aria-hidden="true"
+                            className="pointer-events-none select-none absolute inset-0 m-auto h-72 w-72 object-contain opacity-[0.07]"
+                          />
+                          <div className="relative space-y-4">
+                            <div className="flex items-start justify-between gap-4 border-b-2 border-[#0D47A1] pb-4">
+                              <img src="/company-noBG.png" alt="Way Point Travel Limited" className="h-32 w-auto object-contain" />
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-extrabold text-lg text-[#112240]">OFFICIAL RECEIPT</p>
+                                <p className="text-xs text-gray-500 mt-1">Receipt No: {receiptNumber || "—"}</p>
+                                <p className="text-xs text-gray-500">Date: {receiptDate}</p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2 pt-1">
+                              <p><span className="font-bold text-[#0D47A1]">Received From:</span> <span className="text-[#112240]">{getReceiptName() || "—"}</span></p>
+                              <p><span className="font-bold text-[#0D47A1]">Services:</span> <span className="text-[#112240]">{receiptServices.length > 0 ? receiptServices.join(", ") : "—"}</span></p>
+                              <p><span className="font-bold text-[#0D47A1]">Payment Method:</span> <span className="text-[#112240]">{receiptMethod || "—"}</span></p>
+                              {receiptDescription && <p><span className="font-bold text-[#0D47A1]">Description:</span> <span className="text-[#112240]">{receiptDescription}</span></p>}
+                              {receiptClientEmail && <p><span className="font-bold text-[#0D47A1]">Client Email:</span> <span className="text-[#112240]">{receiptClientEmail}</span></p>}
+                            </div>
+
+                            <div className="bg-[#0D47A1] rounded-xl px-5 py-4 mt-2">
+                              <p className="text-white/80 text-xs font-bold tracking-wide">AMOUNT PAID</p>
+                              <p className="text-white text-2xl font-extrabold mt-1">
+                                {Number(receiptAmount) > 0 ? formatAmount(Number(receiptAmount), getReceiptCurrency() || "NGN") : "—"}
+                              </p>
+                            </div>
+                            <p className="italic text-gray-600 text-xs">
+                              Amount in Words: {Number(receiptAmount) > 0 ? amountToWords(Number(receiptAmount), getReceiptCurrency() || "NGN") : "—"}
+                            </p>
+
+                            <div className="pt-6 mt-2 border-t border-[#0D47A1]/30 text-center">
+                              <p className="text-[11px] text-gray-500 italic">Thank you for choosing Way Point Travel Limited — We bridge the gap.</p>
+                            </div>
                           </div>
                         </div>
                       </div>
