@@ -3305,10 +3305,22 @@ export default function Home() {
                       return (
                         <div className="space-y-3">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <input type="text" value={current.airline || ""} onChange={(e) => updateField("airline", e.target.value)} placeholder="Airline" className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
-                            <input type="text" value={current.flightNumber || ""} onChange={(e) => updateField("flightNumber", e.target.value)} placeholder="Flight Number" className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
-                            <input type="date" value={current.departureDate || ""} onChange={(e) => updateField("departureDate", e.target.value)} className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
-                            <input type="date" value={current.arrivalDate || ""} onChange={(e) => updateField("arrivalDate", e.target.value)} className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase">Airline</label>
+                              <input type="text" value={current.airline || ""} onChange={(e) => updateField("airline", e.target.value)} placeholder="e.g. British Airways" className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase">Flight Number</label>
+                              <input type="text" value={current.flightNumber || ""} onChange={(e) => updateField("flightNumber", e.target.value)} placeholder="e.g. BA249" className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase">Departure Date</label>
+                              <input type="date" value={current.departureDate || ""} onChange={(e) => updateField("departureDate", e.target.value)} className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase">Arrival Date</label>
+                              <input type="date" value={current.arrivalDate || ""} onChange={(e) => updateField("arrivalDate", e.target.value)} className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            </div>
                           </div>
                           <button onClick={handleSaveStageData} disabled={stageDataSaving} className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2 rounded-xl shadow-sm hover:opacity-90 transition-all cursor-pointer disabled:opacity-50">
                             {stageDataSaving ? "Saving..." : "Save Flight Details"}
@@ -3320,8 +3332,14 @@ export default function Home() {
                       return (
                         <div className="space-y-3">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <input type="date" value={current.briefingDate || ""} onChange={(e) => updateField("briefingDate", e.target.value)} className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
-                            <input type="text" value={current.conductedBy || ""} onChange={(e) => updateField("conductedBy", e.target.value)} placeholder="Conducted By" className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase">Briefing Date</label>
+                              <input type="date" value={current.briefingDate || ""} onChange={(e) => updateField("briefingDate", e.target.value)} className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase">Conducted By</label>
+                              <input type="text" value={current.conductedBy || ""} onChange={(e) => updateField("conductedBy", e.target.value)} placeholder="Staff name" className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            </div>
                           </div>
                           <label className="flex items-center gap-2 text-xs text-foreground font-semibold cursor-pointer">
                             <input type="checkbox" checked={!!current.docsReady} onChange={(e) => updateField("docsReady", e.target.checked)} className="h-4 w-4 rounded border-border accent-primary" />
