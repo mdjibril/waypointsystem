@@ -137,6 +137,10 @@ export async function DELETE(request: Request) {
       );
     }
 
+    await prisma.applicationDocumentRequirement.deleteMany({
+      where: { documentTemplateId: Number(id) },
+    });
+
     await prisma.documentTemplate.delete({
       where: { id: Number(id) },
     });

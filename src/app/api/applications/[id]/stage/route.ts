@@ -111,7 +111,10 @@ export async function POST(
       toStage === "DECISION" &&
       (decisionStatus === "WITHDRAWN" || decisionStatus === "PENDING_ACTION");
 
-    if (!isSameStageDecisionUpdate && !isValidTransition(fromStage, toStage as WorkflowStage)) {
+    // Notes-only update (no stage change) — just record a note on the current stage
+    const isNoteOnlyUpdate = fromStage === toStage && !!note && !decisionStatus;
+
+    if (!isSameStageDecisionUpdate && !isNoteOnlyUpdate && !isValidTransition(fromStage, toStage as WorkflowStage)) {
       return NextResponse.json(
         { error: `Cannot move from ${fromStage} to ${toStage}` },
         { status: 400 }
@@ -126,6 +129,22 @@ export async function POST(
           { status: 400 }
         );
       }
+    }
+
+    // Notes-only update: just create a history entry without changing the application
+    if (isNoteOnlyUpdate) {
+      const historyEntry = await prisma.applicationStageHistory.create({
+        data: {
+          applicationId: Number(id),
+          fromStage,
+          toStage,
+          changedById: currentUser.id,
+          note,
+        },
+        include: { changedBy: { select: { id: true, name: true } } },
+      });
+
+      return NextResponse.json({ historyEntry }, { status: 201 });
     }
 
     const newStatus = TERMINAL_STAGES.includes(toStage as WorkflowStage)

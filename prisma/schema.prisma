@@ -143,6 +143,7 @@ model Application {
   submissionRecord   SubmissionRecord?
   trackingUpdates    TrackingUpdate[]
   documentRequirements ApplicationDocumentRequirement[]
+  stageData          Json?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

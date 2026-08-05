@@ -40,7 +40,9 @@ import {
   RefreshCw,
   Download,
   Send,
-  Activity
+  Activity,
+  Trash2,
+  ClipboardList,
 } from "lucide-react";
 import {
   DndContext,
@@ -260,6 +262,10 @@ export default function Home() {
   const [reviewDecisionId, setReviewDecisionId] = useState<number | null>(null);
   const [reviewDecisionAction, setReviewDecisionAction] = useState<string>("");
   const [reviewDecisionNotes, setReviewDecisionNotes] = useState<string>("");
+  const [showDeleteAppModal, setShowDeleteAppModal] = useState(false);
+  const [deleteAppLoading, setDeleteAppLoading] = useState(false);
+  const [stageDataSaving, setStageDataSaving] = useState(false);
+  const [stageDataForm, setStageDataForm] = useState<any>(null);
 
   // Submission & Tracking State
   const [submission, setSubmission] = useState<any>(null);
@@ -587,6 +593,8 @@ export default function Home() {
       if (res.ok) {
         setSelectedApplication(data.application);
         fetchStageHistory(applicationId);
+        setStageDataForm(data.application.stageData || null);
+        fetchStageHistory(applicationId);
         fetchQualityReviews(applicationId);
         fetchSubmission(applicationId);
         fetchTrackingUpdates(applicationId);
@@ -631,6 +639,12 @@ export default function Home() {
       const data = await res.json();
       if (res.ok) setAppDocRequirements(data.requirements);
       else setAppDocRequirements([]);
+      // Also load templates if not yet fetched (needed for +Add Requirement dropdown)
+      if (documentTemplates.length === 0) {
+        const tmplRes = await fetch("/api/documents/templates");
+        const tmplData = await tmplRes.json();
+        if (tmplRes.ok) setDocumentTemplates(tmplData.templates);
+      }
     } catch (err) {
       console.error("Failed to load doc requirements:", err);
       setAppDocRequirements([]);
@@ -817,22 +831,58 @@ export default function Home() {
     if (!selectedApplication || !stageNote.trim()) return;
     setStageNoteSaving(true);
     try {
-      const res = await fetch("/api/activity-log", {
+      const res = await fetch(`/api/applications/${selectedApplication.id}/stage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId: selectedApplication.client?.id,
-          entityType: "APPLICATION",
-          entityId: selectedApplication.id,
-          action: "STAGE_NOTE",
-          description: `[${STAGE_LABELS[selectedApplication.currentStage as keyof typeof STAGE_LABELS] || selectedApplication.currentStage}] ${stageNote}`,
+          toStage: selectedApplication.currentStage,
+          note: stageNote,
         }),
       });
-      if (res.ok) setStageNote("");
+      if (res.ok) {
+        setStageNote("");
+        fetchStageHistory(selectedApplication.id);
+      }
     } catch (err) {
       console.error("Failed to save stage note:", err);
     } finally {
       setStageNoteSaving(false);
+    }
+  };
+
+  const handleDeleteApplication = async () => {
+    if (!selectedApplication) return;
+    setDeleteAppLoading(true);
+    try {
+      const res = await fetch(`/api/applications/${selectedApplication.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setShowDeleteAppModal(false);
+        setSelectedApplication(null);
+        fetchApplications();
+      }
+    } catch (err) {
+      console.error("Failed to delete application:", err);
+    } finally {
+      setDeleteAppLoading(false);
+    }
+  };
+
+  const handleSaveStageData = async () => {
+    if (!selectedApplication) return;
+    setStageDataSaving(true);
+    try {
+      const res = await fetch(`/api/applications/${selectedApplication.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stageData: stageDataForm }),
+      });
+      if (res.ok) {
+        setSelectedApplication({ ...selectedApplication, stageData: stageDataForm });
+      }
+    } catch (err) {
+      console.error("Failed to save stage data:", err);
+    } finally {
+      setStageDataSaving(false);
     }
   };
 
@@ -3075,6 +3125,13 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Actions Row */}
+              <div className="flex items-center gap-2">{user?.role === "ADMIN" && (
+                <button onClick={() => setShowDeleteAppModal(true)} className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer flex items-center gap-1">
+                  <Trash2 className="h-3 w-3" /> Delete Application
+                </button>
+              )}</div>
+
               {stageActionError && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
                   {stageActionError}
@@ -3227,6 +3284,93 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+
+              {/* Stage Information (Flight, Briefing, Travels, Follow-up) */}
+              {(["FLIGHT_BOOKING", "PRE_DEPARTURE_BRIEFING", "CLIENT_TRAVELS", "FOLLOW_UP"] as string[]).includes(selectedApplication.currentStage) && (
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-primary" /> Stage Information
+                  </h4>
+                  {(() => {
+                    const current = stageDataForm || selectedApplication.stageData || {};
+                    const stage = selectedApplication.currentStage;
+
+                    // Helper to update a single field and auto-save
+                    const updateField = (key: string, value: any) => {
+                      const next = { ...current, [key]: value };
+                      if (stageDataForm) { setStageDataForm(next); } else { setStageDataForm(Object.keys(current).length ? next : next); }
+                    };
+
+                    if (stage === "FLIGHT_BOOKING") {
+                      return (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <input type="text" value={current.airline || ""} onChange={(e) => updateField("airline", e.target.value)} placeholder="Airline" className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            <input type="text" value={current.flightNumber || ""} onChange={(e) => updateField("flightNumber", e.target.value)} placeholder="Flight Number" className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            <input type="date" value={current.departureDate || ""} onChange={(e) => updateField("departureDate", e.target.value)} className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            <input type="date" value={current.arrivalDate || ""} onChange={(e) => updateField("arrivalDate", e.target.value)} className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                          </div>
+                          <button onClick={handleSaveStageData} disabled={stageDataSaving} className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2 rounded-xl shadow-sm hover:opacity-90 transition-all cursor-pointer disabled:opacity-50">
+                            {stageDataSaving ? "Saving..." : "Save Flight Details"}
+                          </button>
+                        </div>
+                      );
+                    }
+                    if (stage === "PRE_DEPARTURE_BRIEFING") {
+                      return (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <input type="date" value={current.briefingDate || ""} onChange={(e) => updateField("briefingDate", e.target.value)} className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                            <input type="text" value={current.conductedBy || ""} onChange={(e) => updateField("conductedBy", e.target.value)} placeholder="Conducted By" className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                          </div>
+                          <label className="flex items-center gap-2 text-xs text-foreground font-semibold cursor-pointer">
+                            <input type="checkbox" checked={!!current.docsReady} onChange={(e) => updateField("docsReady", e.target.checked)} className="h-4 w-4 rounded border-border accent-primary" />
+                            All travel documents printed and confirmed
+                          </label>
+                          <button onClick={handleSaveStageData} disabled={stageDataSaving} className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2 rounded-xl shadow-sm hover:opacity-90 transition-all cursor-pointer disabled:opacity-50">
+                            {stageDataSaving ? "Saving..." : "Save Briefing Info"}
+                          </button>
+                        </div>
+                      );
+                    }
+                    if (stage === "CLIENT_TRAVELS") {
+                      return (
+                        <div className="space-y-3">
+                          <label className="flex items-center gap-2 text-xs text-foreground font-semibold cursor-pointer">
+                            <input type="checkbox" checked={!!current.departed} onChange={(e) => updateField("departed", e.target.checked)} className="h-4 w-4 rounded border-border accent-primary" />
+                            Client has departed
+                          </label>
+                          <label className="flex items-center gap-2 text-xs text-foreground font-semibold cursor-pointer">
+                            <input type="checkbox" checked={!!current.arrived} onChange={(e) => updateField("arrived", e.target.checked)} className="h-4 w-4 rounded border-border accent-primary" />
+                            Client has arrived safely
+                          </label>
+                          <button onClick={handleSaveStageData} disabled={stageDataSaving} className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2 rounded-xl shadow-sm hover:opacity-90 transition-all cursor-pointer disabled:opacity-50">
+                            {stageDataSaving ? "Saving..." : "Save Travel Status"}
+                          </button>
+                        </div>
+                      );
+                    }
+                    if (stage === "FOLLOW_UP") {
+                      return (
+                        <div className="space-y-3">
+                          <label className="flex items-center gap-2 text-xs text-foreground font-semibold cursor-pointer">
+                            <input type="checkbox" checked={!!current.testimonialReceived} onChange={(e) => updateField("testimonialReceived", e.target.checked)} className="h-4 w-4 rounded border-border accent-primary" />
+                            Testimonial received
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase w-24">Referral Count</label>
+                            <input type="number" min="0" value={current.referralCount || 0} onChange={(e) => updateField("referralCount", Number(e.target.value))} className="w-16 bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground" />
+                          </div>
+                          <button onClick={handleSaveStageData} disabled={stageDataSaving} className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2 rounded-xl shadow-sm hover:opacity-90 transition-all cursor-pointer disabled:opacity-50">
+                            {stageDataSaving ? "Saving..." : "Save Follow-up"}
+                          </button>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              )}
 
               {/* Required Documents Checklist */}
               <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
@@ -5559,6 +5703,33 @@ export default function Home() {
                   >
                     {reviewDecisionLoading === reviewDecisionId ? <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : `Confirm ${reviewDecisionAction === "CORRECTIONS_REQUESTED" ? "Corrections" : "Rejection"}`}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Application Modal */}
+          {showDeleteAppModal && selectedApplication && (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+              <div className="bg-card border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-6 border-b border-border bg-muted/20">
+                  <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                    <Trash2 className="h-4 w-4 text-red-500" /> Delete Application
+                  </h4>
+                </div>
+                <div className="p-6 space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    Are you sure you want to delete this application? This will permanently remove all stage history, documents, payments, reviews, and checklist requirements for:
+                  </p>
+                  <p className="text-sm font-bold text-foreground">
+                    {selectedApplication.client?.firstName} {selectedApplication.client?.lastName} — {selectedApplication.serviceType} to {selectedApplication.destinationCountry}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setShowDeleteAppModal(false)} disabled={deleteAppLoading} className="flex-1 text-xs font-bold px-4 py-2.5 rounded-xl border border-border bg-card hover:bg-secondary cursor-pointer disabled:opacity-50">Cancel</button>
+                    <button onClick={handleDeleteApplication} disabled={deleteAppLoading} className="flex-1 text-xs font-bold px-4 py-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1">
+                      {deleteAppLoading ? <span className="h-4 w-4 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin" /> : "Delete Permanently"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
