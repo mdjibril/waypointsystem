@@ -380,6 +380,13 @@ export default function Home() {
     }
   }, [currentTab, user]);
 
+  // Load staff on mount so dropdowns on other tabs have them immediately
+  useEffect(() => {
+    if (user?.role.toUpperCase() === "ADMIN" && staffUsers.length === 0) {
+      fetchStaff();
+    }
+  }, [user]);
+
   // Load clients when Clients tab is selected
   const fetchClients = async () => {
     setClientsLoading(true);
@@ -4234,7 +4241,10 @@ export default function Home() {
                           </div>
                           <div className="flex items-center gap-2">
                             {d.fileUrl && (
-                              <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 cursor-pointer no-underline">View</a>
+                              <a href={`/api/documents/${d.id}/download`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 cursor-pointer no-underline">View</a>
+                            )}
+                            {d.fileUrl && (
+                              <a href={`/api/documents/${d.id}/download`} download className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 cursor-pointer no-underline">Download</a>
                             )}
                             {user?.role === "ADMIN" && d.status === "PENDING" ? (
                               <div className="flex items-center gap-1">
@@ -4292,7 +4302,7 @@ export default function Home() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          {d.fileUrl && (<a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 cursor-pointer no-underline">View</a>)}
+                          {d.fileUrl && (<a href={`/api/documents/${d.id}/download`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 cursor-pointer no-underline">View</a>)}
                           <button
                             onClick={() => handleVerifyDocument(d.id, "VERIFIED")}
                             className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer"
