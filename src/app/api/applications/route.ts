@@ -118,6 +118,26 @@ export async function POST(request: Request) {
       },
     });
 
+    // Auto-copy matching document templates into per-application checklist
+    const matchingTemplates = await prisma.documentTemplate.findMany({
+      where: {
+        OR: [
+          { serviceType: null },
+          { serviceType },
+        ],
+      },
+    });
+
+    if (matchingTemplates.length > 0) {
+      await prisma.applicationDocumentRequirement.createMany({
+        data: matchingTemplates.map((tpl) => ({
+          applicationId: newApplication.id,
+          documentTemplateId: tpl.id,
+          isRequired: tpl.isRequired,
+        })),
+      });
+    }
+
     return NextResponse.json({ application: newApplication }, { status: 201 });
   } catch (error: any) {
     console.error("Create application error:", error);

@@ -69,6 +69,7 @@ model DocumentTemplate {
   sortOrder          Int      @default(0)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  appRequirements    ApplicationDocumentRequirement[]
 
   @@unique([name, serviceType])
   @@map("document_templates")
@@ -141,10 +142,24 @@ model Application {
   qualityReviews     QualityReview[]
   submissionRecord   SubmissionRecord?
   trackingUpdates    TrackingUpdate[]
+  documentRequirements ApplicationDocumentRequirement[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@map("applications")
+}
+
+model ApplicationDocumentRequirement {
+  id                 Int              @id @default(autoincrement())
+  applicationId      Int
+  application        Application      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  documentTemplateId Int
+  documentTemplate   DocumentTemplate @relation(fields: [documentTemplateId], references: [id])
+  isRequired         Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+
+  @@unique([applicationId, documentTemplateId])
+  @@map("application_document_requirements")
 }
 
 model Task {

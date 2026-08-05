@@ -8,6 +8,8 @@ const mockPrisma = {
   task: { findMany: vi.fn(), create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
   application: { findMany: vi.fn(), create: vi.fn(), update: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
   applicationStageHistory: { create: vi.fn() },
+  documentTemplate: { findMany: vi.fn() },
+  applicationDocumentRequirement: { createMany: vi.fn() },
   $transaction: vi.fn(),
 };
 
@@ -209,6 +211,8 @@ describe("Application integration flow", () => {
     loginAs(adminUser);
     mockPrisma.client.findUnique.mockResolvedValue(clientFixture);
     mockPrisma.application.create.mockResolvedValue(applicationFixture);
+    mockPrisma.applicationStageHistory.create.mockResolvedValue({ id: 1 });
+    mockPrisma.documentTemplate.findMany.mockResolvedValue([]);
 
     const { POST } = await import("@/app/api/applications/route");
 

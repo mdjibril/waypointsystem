@@ -302,6 +302,9 @@ export default function Home() {
   const [newTemplateRequired, setNewTemplateRequired] = useState(true);
   const [addTemplateError, setAddTemplateError] = useState<string | null>(null);
   const [addTemplateLoading, setAddTemplateLoading] = useState(false);
+  const [appDocRequirements, setAppDocRequirements] = useState<any[]>([]);
+  const [showAddRequirement, setShowAddRequirement] = useState(false);
+  const [addReqLoading, setAddReqLoading] = useState(false);
 
   // Document Upload State
   const [isAddDocumentOpen, setIsAddDocumentOpen] = useState(false);
@@ -579,6 +582,7 @@ export default function Home() {
         fetchQualityReviews(applicationId);
         fetchSubmission(applicationId);
         fetchTrackingUpdates(applicationId);
+        fetchDocumentRequirements(applicationId);
       }
     } catch (err) {
       console.error("Failed to load application:", err);
@@ -610,6 +614,52 @@ export default function Home() {
       console.error("Failed to load quality reviews:", err);
     } finally {
       setQualityReviewsLoading(false);
+    }
+  };
+
+  const fetchDocumentRequirements = async (applicationId: number) => {
+    try {
+      const res = await fetch(`/api/applications/${applicationId}/document-requirements`);
+      const data = await res.json();
+      if (res.ok) setAppDocRequirements(data.requirements);
+      else setAppDocRequirements([]);
+    } catch (err) {
+      console.error("Failed to load doc requirements:", err);
+      setAppDocRequirements([]);
+    }
+  };
+
+  const handleAddRequirement = async (templateId: number) => {
+    if (!selectedApplication) return;
+    setAddReqLoading(true);
+    try {
+      const res = await fetch(`/api/applications/${selectedApplication.id}/document-requirements`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentTemplateId: templateId }),
+      });
+      if (res.ok) {
+        await fetchDocumentRequirements(selectedApplication.id);
+        setShowAddRequirement(false);
+      }
+    } catch (err) {
+      console.error("Failed to add requirement:", err);
+    } finally {
+      setAddReqLoading(false);
+    }
+  };
+
+  const handleRemoveRequirement = async (requirementId: number) => {
+    if (!selectedApplication) return;
+    try {
+      const res = await fetch(`/api/applications/${selectedApplication.id}/document-requirements?requirementId=${requirementId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        await fetchDocumentRequirements(selectedApplication.id);
+      }
+    } catch (err) {
+      console.error("Failed to remove requirement:", err);
     }
   };
 
@@ -3159,42 +3209,77 @@ export default function Home() {
                   <FileCheck2 className="h-4 w-4 text-primary" /> Required Documents Checklist
                 </h4>
                 {(() => {
-                  const matchingTemplates = documentTemplates.filter(
-                    (tpl: any) => !tpl.serviceType || tpl.serviceType === selectedApplication.serviceType
-                  );
                   const uploadedDocs = documents.filter(
                     (d: any) => d.applicationId === selectedApplication.id || d.clientId === selectedApplication.client?.id
                   );
-                  return matchingTemplates.length === 0 ? (
+                  const requirements = appDocRequirements;
+                  const usingAppSpecific = requirements.length > 0;
+                  const items = usingAppSpecific
+                    ? requirements.map((r: any) => ({ ...r.documentTemplate, requirementId: r.id, isRequired: r.isRequired, key: r.id }))
+                    : documentTemplates
+                        .filter((tpl: any) => !tpl.serviceType || tpl.serviceType === selectedApplication.serviceType)
+                        .map((tpl: any) => ({ ...tpl, requirementId: tpl.id, key: "global-" + tpl.id }));
+                  
+                  return items.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No document templates configured for this service type. Add templates in the Documents tab.</p>
                   ) : (
                     <div className="space-y-2">
-                      {matchingTemplates.map((tpl: any) => {
-                        const uploaded = uploadedDocs.find((d: any) => d.documentType === tpl.name);
+                      {items.map((item: any) => {
+                        const uploaded = uploadedDocs.find((d: any) => d.documentType === item.name);
                         return (
-                          <div key={tpl.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-muted/10">
+                          <div key={item.key} className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-muted/10">
                             <div className="flex items-center gap-3">
                               <FileText className="h-4 w-4 text-muted-foreground" />
                               <div>
-                                <p className="text-xs font-semibold text-foreground">{tpl.name}</p>
+                                <p className="text-xs font-semibold text-foreground">{item.name}</p>
                                 <p className="text-[10px] text-muted-foreground">
-                                  {tpl.isRequired ? "Required" : "Optional"}
-                                  {tpl.serviceType && <> · {tpl.serviceType}</>}
+                                  {item.isRequired ? "Required" : "Optional"}
+                                  {item.serviceType && <> · {item.serviceType}</>}
                                 </p>
                               </div>
                             </div>
-                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                              uploaded
-                                ? uploaded.status === "VERIFIED"
-                                  ? "bg-green-500/10 text-green-600"
-                                  : "bg-yellow-500/10 text-yellow-600"
-                                : "bg-muted/60 text-muted-foreground"
-                            }`}>
-                              {uploaded ? uploaded.status.replace(/_/g, " ") : "Not Uploaded"}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                uploaded
+                                  ? uploaded.status === "VERIFIED"
+                                    ? "bg-green-500/10 text-green-600"
+                                    : "bg-yellow-500/10 text-yellow-600"
+                                  : "bg-muted/60 text-muted-foreground"
+                              }`}>
+                                {uploaded ? uploaded.status.replace(/_/g, " ") : "Not Uploaded"}
+                              </span>
+                              {usingAppSpecific && (
+                                <button onClick={() => handleRemoveRequirement(item.requirementId)} className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer">✕</button>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
+                      {usingAppSpecific && (
+                        <div className="pt-2">
+                          {showAddRequirement ? (
+                            <div className="flex items-center gap-2">
+                              <select
+                                onChange={(e) => { if (e.target.value) handleAddRequirement(Number(e.target.value)); }}
+                                disabled={addReqLoading}
+                                className="flex-1 bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground disabled:opacity-50"
+                              >
+                                <option value="">Select template to add...</option>
+                                {documentTemplates
+                                  .filter((tpl: any) => (!tpl.serviceType || tpl.serviceType === selectedApplication.serviceType) && !requirements.some((r: any) => r.documentTemplate.id === tpl.id))
+                                  .map((tpl: any) => (
+                                    <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                                  ))}
+                              </select>
+                              <button onClick={() => setShowAddRequirement(false)} className="text-[10px] text-muted-foreground hover:text-foreground font-semibold cursor-pointer">Cancel</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setShowAddRequirement(true)} className="text-[10px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1">
+                              <Plus className="h-3 w-3" /> Add Requirement
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
