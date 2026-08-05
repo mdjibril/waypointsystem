@@ -51,8 +51,11 @@ async function main() {
     { name: "Application Submission", slug: "application-submission", order: 8, description: "Embassy/VFS/TLS submission, biometrics booking, and reference tracking." },
     { name: "Application Tracking", slug: "application-tracking", order: 9, description: "Track status, schedule follow-ups, and handle embassy requests." },
     { name: "Decision", slug: "decision", order: 10, description: "Record outcome: approved, refused, withdrawn, or pending action." },
-    { name: "Visa Approved Path", slug: "visa-approved-path", order: 11, description: "Flight, hotel, insurance, pre-departure, travel, and follow-up." },
-    { name: "Visa Refused Path", slug: "visa-refused-path", order: 12, description: "Refusal review, reapply strategy, and optional new application." },
+    { name: "Flight Booking", slug: "flight-booking", order: 11, description: "Search, book flight, hotel, and arrange travel insurance." },
+    { name: "Pre-Departure Briefing", slug: "pre-departure-briefing", order: 12, description: "Brief client on travel itinerary, visa conditions, and cultural tips." },
+    { name: "Client Travels", slug: "client-travels", order: 13, description: "Verify departure and arrival, send post-arrival check-in." },
+    { name: "Follow-up & Testimonials", slug: "follow-up-testimonials", order: 14, description: "Collect feedback, testimonials, referrals, and close client file." },
+    { name: "Visa Refused Path", slug: "visa-refused-path", order: 15, description: "Refusal review, reapply strategy, and optional new application." },
   ];
 
   for (const stage of stages) {
@@ -69,6 +72,8 @@ async function main() {
     { name: "UK Tourist Visa", slug: "uk-tourist-visa", description: "Standard Visitor visa for tourism, family visits, or business." },
     { name: "Canada Study Permit", slug: "canada-study-permit", description: "Study permit for post-secondary education in Canada." },
     { name: "Schengen Tourist Visa", slug: "schengen-tourist-visa", description: "Short-stay visa for tourism in the Schengen Area." },
+    { name: "Schengen Study Visa", slug: "schengen-study-visa", description: "Long-stay visa for academic studies in the Schengen Area." },
+    { name: "Schengen Other Visa", slug: "schengen-other-visa", description: "Other short or long-stay visa for the Schengen Area." },
     { name: "USA B1/B2 Visa", slug: "usa-b1-b2-visa", description: "Business/tourism visa for the United States." },
     { name: "Australia Visitor Visa", slug: "australia-visitor-visa", description: "Visitor visa for tourism or business visits to Australia." },
     { name: "UK Student Visa", slug: "uk-student-visa", description: "Student visa for academic studies in the UK." },

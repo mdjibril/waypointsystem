@@ -50,9 +50,10 @@ describe("canManageClients / canManageApplications", () => {
 });
 
 describe("canTransitionApplication", () => {
-  it("follows the same ownership rule as canAccessClient", () => {
+  it("is admin-only", () => {
     expect(canTransitionApplication("ADMIN", null, 1)).toBe(true);
-    expect(canTransitionApplication("STAFF", 1, 1)).toBe(true);
+    expect(canTransitionApplication("ADMIN", 5, 5)).toBe(true);
+    expect(canTransitionApplication("STAFF", 1, 1)).toBe(false);
     expect(canTransitionApplication("STAFF", 1, 2)).toBe(false);
   });
 });

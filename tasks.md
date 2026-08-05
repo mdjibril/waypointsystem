@@ -97,7 +97,7 @@ Merge order:
 | [x] Build application detail page with current stage | Developer 2 | `feature/application-detail` | Application create, workflow rules |
 | [x] Build admin pipeline board by stage | Developer 2 | `feature/workflow-pipeline` | Application detail, stage history |
 | [x] Add stage movement actions and activity logging | Developer 1 | `feature/stage-transitions` | Stage history, pipeline |
-| [x] Add approved/refused decision branching | Developer 2 | `feature/decision-branching` | Stage transitions |
+| [x] Add approved/refused decision branching with 4-stage approved path | Developer 2 | `feature/decision-branching` | Stage transitions |
 
 Merge order:
 
@@ -107,6 +107,16 @@ Merge order:
 4. `feature/workflow-pipeline`
 5. `feature/stage-transitions`
 6. `feature/decision-branching`
+
+## Phase 4b: Approved Path Post-Decision Stages
+
+| Task | Owner | Branch | Depends On |
+| --- | --- | --- | --- |
+| [x] Split VISA_APPROVED_PATH into FLIGHT_BOOKING, PRE_DEPARTURE_BRIEFING, CLIENT_TRAVELS, FOLLOW_UP | Developer 1 | `feature/approved-path-stages` | Decision branching |
+| [x] Add substage task templates for approved and refused paths (17 total) | Developer 1 | `feature/substage-templates` | Approved path stages |
+| [x] Auto-generate task templates when application enters a post-decision stage | Developer 1 | `feature/auto-generate-tasks` | Substage templates |
+| [x] Update pipeline board, dashboard charts, and reports for 15 stages | Developer 2 | `feature/pipeline-15-stages` | Approved path stages |
+| [x] Update seed data and tests for new stage structure | Developer 1 | `feature/seed-15-stages` | Approved path stages |
 
 ## Phase 5: Task Assignment
 

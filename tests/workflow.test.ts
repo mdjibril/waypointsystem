@@ -23,6 +23,10 @@ describe("STAGE_ORDER", () => {
       expect(STAGE_ORDER).toContain(stage);
     }
   });
+
+  it("has all 15 workflow stages", () => {
+    expect(STAGE_ORDER.length).toBe(15);
+  });
 });
 
 describe("getAllowedNextStages", () => {
@@ -44,25 +48,34 @@ describe("getAllowedNextStages", () => {
     ]);
   });
 
-  it("special-cases DECISION to offer both outcomes plus a way back", () => {
+  it("special-cases DECISION to offer approved path, refused path, and a way back", () => {
     expect(getAllowedNextStages("DECISION")).toEqual([
-      "VISA_APPROVED_PATH",
+      "FLIGHT_BOOKING",
       "VISA_REFUSED_PATH",
       "APPLICATION_TRACKING",
     ]);
   });
 
-  it("only allows returning to DECISION from a terminal stage", () => {
-    expect(getAllowedNextStages("VISA_APPROVED_PATH")).toEqual(["DECISION"]);
+  it("only allows returning to DECISION from the refused path", () => {
     expect(getAllowedNextStages("VISA_REFUSED_PATH")).toEqual(["DECISION"]);
+  });
+
+  it("moves forward through approved path stages and allows backward steps", () => {
+    expect(getAllowedNextStages("FLIGHT_BOOKING")).toEqual(["PRE_DEPARTURE_BRIEFING", "DECISION"]);
+  });
+
+  it("moves forward from pre-departure to client travels", () => {
+    expect(getAllowedNextStages("PRE_DEPARTURE_BRIEFING")).toEqual(["CLIENT_TRAVELS", "FLIGHT_BOOKING"]);
+  });
+
+  it("allows follow-up to be accessible from both terminal approved stages", () => {
+    expect(getAllowedNextStages("CLIENT_TRAVELS")).toEqual(["FOLLOW_UP", "DECISION"]);
+    expect(getAllowedNextStages("FOLLOW_UP")).toEqual(["FOLLOW_UP", "DECISION"]);
   });
 });
 
 describe("isValidTransition", () => {
   it("allows the standard forward path up to DECISION", () => {
-    // Stages after DECISION (the two terminal paths) branch specially and are
-    // covered by the dedicated DECISION/terminal-stage tests below, not this
-    // plain "next stage in the list" walk.
     const decisionIndex = STAGE_ORDER.indexOf(DECISION_STAGE);
     for (let i = 0; i < decisionIndex; i++) {
       const from = STAGE_ORDER[i];
@@ -77,22 +90,25 @@ describe("isValidTransition", () => {
   });
 
   it("rejects moving backward from the first stage", () => {
-    // There is no stage before CLIENT_INQUIRY, so nothing should be a valid
-    // "backward" move away from it other than its one forward neighbor.
     expect(isValidTransition("CLIENT_INQUIRY", "CUSTOMER_SERVICE_REGISTRATION")).toBe(true);
     expect(isValidTransition("CUSTOMER_SERVICE_REGISTRATION", "CLIENT_INQUIRY")).toBe(true);
   });
 
-  it("rejects moving from a terminal stage to anything but DECISION", () => {
-    expect(isValidTransition("VISA_APPROVED_PATH", "DECISION")).toBe(true);
-    expect(isValidTransition("VISA_APPROVED_PATH", "VISA_REFUSED_PATH")).toBe(false);
-    expect(isValidTransition("VISA_APPROVED_PATH", "APPLICATION_TRACKING")).toBe(false);
+  it("rejects moving from a terminal stage to anything but DECISION or follow-up", () => {
+    expect(isValidTransition("FLIGHT_BOOKING", "DECISION")).toBe(true);
+    expect(isValidTransition("FLIGHT_BOOKING", "VISA_REFUSED_PATH")).toBe(false);
+  });
+
+  it("allows the full approved path sequence", () => {
+    expect(isValidTransition("FLIGHT_BOOKING", "PRE_DEPARTURE_BRIEFING")).toBe(true);
+    expect(isValidTransition("PRE_DEPARTURE_BRIEFING", "CLIENT_TRAVELS")).toBe(true);
+    expect(isValidTransition("CLIENT_TRAVELS", "FOLLOW_UP")).toBe(true);
   });
 });
 
 describe("stageForDecision", () => {
-  it("maps APPROVED to the approved path", () => {
-    expect(stageForDecision("APPROVED")).toBe("VISA_APPROVED_PATH");
+  it("maps APPROVED to flight booking", () => {
+    expect(stageForDecision("APPROVED")).toBe("FLIGHT_BOOKING");
   });
 
   it("maps REFUSED to the refused path", () => {

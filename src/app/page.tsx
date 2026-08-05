@@ -229,12 +229,15 @@ export default function Home() {
   const [addAppError, setAddAppError] = useState<string | null>(null);
   const [addAppSuccess, setAddAppSuccess] = useState<string | null>(null);
   const [addAppLoading, setAddAppLoading] = useState(false);
+  const [appFilterStatus, setAppFilterStatus] = useState("all");
 
   // Application Detail State
   const [selectedApplication, setSelectedApplication] = useState<any>(null);
   const [applicationDetailLoading, setApplicationDetailLoading] = useState(false);
   const [stageHistory, setStageHistory] = useState<any[]>([]);
   const [stageHistoryLoading, setStageHistoryLoading] = useState(false);
+  const [stageNote, setStageNote] = useState("");
+  const [stageNoteSaving, setStageNoteSaving] = useState(false);
   const [activityLog, setActivityLog] = useState<any[]>([]);
   const [activityLogLoading, setActivityLogLoading] = useState(false);
   const [stageActionLoading, setStageActionLoading] = useState(false);
@@ -253,6 +256,9 @@ export default function Home() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewRequestLoading, setReviewRequestLoading] = useState(false);
   const [reviewDecisionLoading, setReviewDecisionLoading] = useState<number | null>(null);
+  const [reviewDecisionId, setReviewDecisionId] = useState<number | null>(null);
+  const [reviewDecisionAction, setReviewDecisionAction] = useState<string>("");
+  const [reviewDecisionNotes, setReviewDecisionNotes] = useState<string>("");
 
   // Submission & Tracking State
   const [submission, setSubmission] = useState<any>(null);
@@ -537,6 +543,22 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (currentTab === "reviews") {
+      fetchAllQualityReviews();
+    }
+  }, [currentTab]);
+
+  const fetchAllQualityReviews = async () => {
+    setQualityReviewsLoading(true);
+    try {
+      const res = await fetch("/api/quality-reviews");
+      const data = await res.json();
+      if (res.ok) setQualityReviews(data.reviews);
+    } catch (err) { console.error("Failed to load all quality reviews:", err); }
+    finally { setQualityReviewsLoading(false); }
+  };
+
+  useEffect(() => {
     if (currentTab === "payments") {
       fetchPayments();
       if (clients.length === 0) fetchClients();
@@ -642,16 +664,19 @@ export default function Home() {
     }
   };
 
-  const handleDecideReview = async (reviewId: number, decision: string) => {
+  const handleDecideReview = async (reviewId: number, decision: string, notes?: string) => {
     setReviewDecisionLoading(reviewId);
     try {
       const res = await fetch("/api/quality-reviews", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: reviewId, decision }),
+        body: JSON.stringify({ id: reviewId, decision, notes }),
       });
       const data = await res.json();
       if (res.ok && selectedApplication) {
+        setReviewDecisionId(null);
+        setReviewDecisionAction("");
+        setReviewDecisionNotes("");
         fetchQualityReviews(selectedApplication.id);
         if (decision === "APPROVED") {
           setSelectedApplication((prev: any) => prev ? { ...prev, currentStage: "QUALITY_REVIEW" } : prev);
@@ -710,6 +735,29 @@ export default function Home() {
       console.error("Failed to save submission:", err);
     } finally {
       setSubmissionSaving(false);
+    }
+  };
+
+  const handleSaveStageNote = async () => {
+    if (!selectedApplication || !stageNote.trim()) return;
+    setStageNoteSaving(true);
+    try {
+      const res = await fetch("/api/activity-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: selectedApplication.client?.id,
+          entityType: "APPLICATION",
+          entityId: selectedApplication.id,
+          action: "STAGE_NOTE",
+          description: `[${STAGE_LABELS[selectedApplication.currentStage as keyof typeof STAGE_LABELS] || selectedApplication.currentStage}] ${stageNote}`,
+        }),
+      });
+      if (res.ok) setStageNote("");
+    } catch (err) {
+      console.error("Failed to save stage note:", err);
+    } finally {
+      setStageNoteSaving(false);
     }
   };
 
@@ -779,7 +827,7 @@ export default function Home() {
   const canTransitionApplication = (app: any) => {
     if (!user) return false;
     if (user.role.toUpperCase() === "ADMIN") return true;
-    return app.client?.assignedStaffId === user.id;
+    return false;
   };
 
   // Pipeline board drag-and-drop
@@ -1246,6 +1294,13 @@ export default function Home() {
     } finally {
       setAddDocLoading(false);
     }
+  };
+
+  const handleDeleteTemplate = async (templateId: number) => {
+    try {
+      const res = await fetch("/api/documents/templates?id=" + templateId, { method: "DELETE" });
+      if (res.ok) { setDocumentTemplates((prev) => prev.filter((t) => t.id !== templateId)); }
+    } catch (err) { console.error("Failed to delete template:", err); }
   };
 
   const handleVerifyDocument = async (docId: number, newStatus: string) => {
@@ -1739,6 +1794,48 @@ export default function Home() {
                     );
                   })()}
                 </div>
+              </div>
+
+              {/* Completed Applications Quick View */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <Check className="h-4 w-4 text-green-500" /> Completed Applications
+                </h4>
+                {(() => {
+                  const completed = applications.filter((a: any) => a.decisionStatus === "APPROVED" || a.decisionStatus === "REFUSED");
+                  return completed.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">No completed applications yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {completed.slice(0, 8).map((app: any) => (
+                        <div key={app.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-primary/40 transition-colors bg-muted/10">
+                          <div className="flex items-center gap-3">
+                            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold uppercase ${
+                              app.decisionStatus === "APPROVED" ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
+                            }`}>
+                              {app.client?.firstName?.charAt(0)}{app.client?.lastName?.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-foreground">{app.client?.firstName} {app.client?.lastName}</p>
+                              <p className="text-[10px] text-muted-foreground">{app.client?.fileNumber} · {app.serviceType} · {app.destinationCountry}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                              app.decisionStatus === "APPROVED" ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
+                            }`}>{app.decisionStatus}</span>
+                            <button onClick={() => viewApplication(app.id)} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">View</button>
+                          </div>
+                        </div>
+                      ))}
+                      {completed.length > 8 && (
+                        <button onClick={() => { setCurrentTab("applications"); setAppFilterStatus("APPROVED"); }} className="w-full text-center text-[10px] font-bold text-primary hover:underline cursor-pointer mt-2 py-2">
+                          View all {completed.length - 8} more completed applications →
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Staff Workload + Tasks */}
@@ -2678,6 +2775,8 @@ export default function Home() {
                           <option value="UK Tourist Visa">UK Tourist Visa</option>
                           <option value="Canada Study Permit">Canada Study Permit</option>
                           <option value="Schengen Tourist Visa">Schengen Tourist Visa</option>
+                        <option value="Schengen Study Visa">Schengen Study Visa</option>
+                        <option value="Schengen Other Visa">Schengen Other Visa</option>
                           <option value="USA B1/B2 Visa">USA B1/B2 Visa</option>
                           <option value="Australia Visitor Visa">Australia Visitor Visa</option>
                           <option value="UK Student Visa">UK Student Visa</option>
@@ -2760,13 +2859,35 @@ export default function Home() {
                 </div>
               )}
 
+              {/* Application Filters */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <select
+                  value={appFilterStatus}
+                  onChange={(e) => setAppFilterStatus(e.target.value)}
+                  className="bg-card border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                >
+                  <option value="all">All Applications</option>
+                  <option value="ACTIVE">Active (Not Complete)</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="REFUSED">Refused</option>
+                  <option value="WITHDRAWN">Withdrawn</option>
+                  <option value="PENDING_ACTION">Pending Action</option>
+                </select>
+                {appFilterStatus !== "all" && (
+                  <button onClick={() => setAppFilterStatus("all")} className="text-[10px] text-muted-foreground hover:text-foreground font-semibold underline cursor-pointer">Clear filter</button>
+                )}
+                <span className="text-[10px] text-muted-foreground ml-auto">
+                  {applications.filter((a: any) => { if (appFilterStatus === "all") return true; if (appFilterStatus === "ACTIVE") return a.status !== "COMPLETED" && a.decisionStatus !== "APPROVED" && a.decisionStatus !== "REFUSED"; if (appFilterStatus === "APPROVED") return a.decisionStatus === "APPROVED"; if (appFilterStatus === "REFUSED") return a.decisionStatus === "REFUSED"; if (appFilterStatus === "WITHDRAWN") return a.decisionStatus === "WITHDRAWN"; if (appFilterStatus === "PENDING_ACTION") return a.decisionStatus === "PENDING_ACTION"; return true; }).length} shown of {applications.length} total
+                </span>
+              </div>
+
               {/* Applications Table */}
               <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
                 {applicationsLoading ? (
                   <div className="py-12 flex justify-center items-center">
                     <div className="h-8 w-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
                   </div>
-                ) : applications.length === 0 ? (
+                ) : (applications.filter((a: any) => { if (appFilterStatus === "all") return true; if (appFilterStatus === "ACTIVE") return a.status !== "COMPLETED" && a.decisionStatus !== "APPROVED" && a.decisionStatus !== "REFUSED"; if (appFilterStatus === "APPROVED") return a.decisionStatus === "APPROVED"; if (appFilterStatus === "REFUSED") return a.decisionStatus === "REFUSED"; if (appFilterStatus === "WITHDRAWN") return a.decisionStatus === "WITHDRAWN"; if (appFilterStatus === "PENDING_ACTION") return a.decisionStatus === "PENDING_ACTION"; return true; }).length === 0) ? (
                   <div className="py-12 flex flex-col items-center justify-center text-muted-foreground">
                     <FileText className="h-10 w-10 mb-3 opacity-40" />
                     <p className="text-sm font-semibold">No applications yet</p>
@@ -2785,7 +2906,15 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60 text-xs">
-                      {applications.map((app: any) => (
+                      {applications.filter((a: any) => {
+                    if (appFilterStatus === "all") return true;
+                    if (appFilterStatus === "ACTIVE") return a.status !== "COMPLETED" && a.decisionStatus !== "APPROVED" && a.decisionStatus !== "REFUSED";
+                    if (appFilterStatus === "APPROVED") return a.decisionStatus === "APPROVED";
+                    if (appFilterStatus === "REFUSED") return a.decisionStatus === "REFUSED";
+                    if (appFilterStatus === "WITHDRAWN") return a.decisionStatus === "WITHDRAWN";
+                    if (appFilterStatus === "PENDING_ACTION") return a.decisionStatus === "PENDING_ACTION";
+                    return true;
+                  }).map((app: any) => (
                         <tr key={app.id} className="hover:bg-muted/10 transition-colors">
                           <td className="py-3.5 px-6">
                             <div>
@@ -2923,7 +3052,7 @@ export default function Home() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button
                         disabled={stageActionLoading}
-                        onClick={() => moveApplicationStage(selectedApplication.id, "VISA_APPROVED_PATH", "APPROVED")}
+                        onClick={() => moveApplicationStage(selectedApplication.id, "FLIGHT_BOOKING", "APPROVED")}
                         className="bg-green-500/10 text-green-600 text-xs font-bold px-3 py-2.5 rounded-xl hover:bg-green-500/20 transition-all cursor-pointer disabled:opacity-50"
                       >
                         Approve
@@ -2985,8 +3114,9 @@ export default function Home() {
                         <div className="h-2 w-2 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
                         <div>
                           <p className="text-xs font-semibold text-foreground">
-                            {h.fromStage ? `${STAGE_LABELS[h.fromStage as keyof typeof STAGE_LABELS] || h.fromStage} → ` : ""}
-                            {STAGE_LABELS[h.toStage as keyof typeof STAGE_LABELS] || h.toStage}
+                            {h.fromStage
+                              ? `${STAGE_LABELS[h.fromStage as keyof typeof STAGE_LABELS] || h.fromStage} → ${STAGE_LABELS[h.toStage as keyof typeof STAGE_LABELS] || h.toStage}`
+                              : `Started at ${STAGE_LABELS[h.toStage as keyof typeof STAGE_LABELS] || h.toStage}`}
                           </p>
                           <p className="text-[10px] text-muted-foreground mt-0.5">
                             {h.changedBy?.name || "Unknown"} · {new Date(h.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
@@ -2998,21 +3128,95 @@ export default function Home() {
                 )}
               </div>
 
+              {/* Stage Notes */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-primary" /> Stage Notes
+                </h4>
+                {stageHistory.filter((h: any) => h.note).map((h: any) => (
+                  <div key={"note-" + h.id} className="flex items-start gap-3 p-3 bg-muted/20 rounded-xl mb-2">
+                    <div className="h-2 w-2 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
+                    <div>
+                      <p className="text-xs text-foreground">{h.note}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{h.changedBy?.name || "Unknown"} · {new Date(h.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                    </div>
+                  </div>
+                ))}
+                {stageHistory.filter((h: any) => h.note).length === 0 && (
+                  <p className="text-xs text-muted-foreground">No notes yet for this application.</p>
+                )}
+                <div className="flex gap-2 mt-3">
+                  <input type="text" value={stageNote} onChange={(e) => setStageNote(e.target.value)} placeholder="Add a note (e.g., flight details, booking references, briefing notes)..." className="flex-1 bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground" />
+                  <button onClick={handleSaveStageNote} disabled={stageNoteSaving || !stageNote.trim()} className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2 rounded-xl shadow-sm hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex-shrink-0">
+                    {stageNoteSaving ? "Saving..." : "Save Note"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Required Documents Checklist */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <FileCheck2 className="h-4 w-4 text-primary" /> Required Documents Checklist
+                </h4>
+                {(() => {
+                  const matchingTemplates = documentTemplates.filter(
+                    (tpl: any) => !tpl.serviceType || tpl.serviceType === selectedApplication.serviceType
+                  );
+                  const uploadedDocs = documents.filter(
+                    (d: any) => d.applicationId === selectedApplication.id || d.clientId === selectedApplication.client?.id
+                  );
+                  return matchingTemplates.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No document templates configured for this service type. Add templates in the Documents tab.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {matchingTemplates.map((tpl: any) => {
+                        const uploaded = uploadedDocs.find((d: any) => d.documentType === tpl.name);
+                        return (
+                          <div key={tpl.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-muted/10">
+                            <div className="flex items-center gap-3">
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-xs font-semibold text-foreground">{tpl.name}</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {tpl.isRequired ? "Required" : "Optional"}
+                                  {tpl.serviceType && <> · {tpl.serviceType}</>}
+                                </p>
+                              </div>
+                            </div>
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                              uploaded
+                                ? uploaded.status === "VERIFIED"
+                                  ? "bg-green-500/10 text-green-600"
+                                  : "bg-yellow-500/10 text-yellow-600"
+                                : "bg-muted/60 text-muted-foreground"
+                            }`}>
+                              {uploaded ? uploaded.status.replace(/_/g, " ") : "Not Uploaded"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* Application Payments */}
               <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
                 <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
                   <CreditCard className="h-4 w-4 text-primary" /> Payments
                 </h4>
-                {payments.filter((p: any) => p.applicationId === selectedApplication.id).length === 0 ? (
-                  <EmptyState
-                    icon={<CreditCard className="h-6 w-6" />}
-                    title="No payments recorded for this application"
-                    description="Invoices and payments tied to this application will appear here."
-                  />
-                ) : (
-                  <>
-                    <div className="space-y-2 mb-4">
-                      {payments.filter((p: any) => p.applicationId === selectedApplication.id).map((p: any) => (
+                {(() => {
+                  const appPayments = payments.filter((p: any) => p.applicationId === selectedApplication.id || (p.clientId === selectedApplication.client?.id && !p.applicationId));
+                  return appPayments.length === 0 ? (
+                    <EmptyState
+                      icon={<CreditCard className="h-6 w-6" />}
+                      title="No payments recorded for this application"
+                      description="Invoices and payments tied to this application will appear here."
+                    />
+                  ) : (
+                    <>
+                      <div className="space-y-2 mb-4">
+                        {appPayments.map((p: any) => (
                         <div key={p.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-primary/50 transition-colors bg-muted/10">
                           <div>
                             <p className="text-xs font-bold text-foreground font-mono">{p.invoiceNumber}</p>
@@ -3026,16 +3230,16 @@ export default function Home() {
                         </div>
                       ))}
                     </div>
-                    {outstandingByCurrency(payments.filter((p: any) => p.applicationId === selectedApplication.id)).length > 0 && (
+                    {outstandingByCurrency(appPayments).length > 0 && (
                       <div className="border-t border-border pt-3 flex flex-wrap gap-x-4 gap-y-1">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase">Outstanding:</span>
-                        {outstandingByCurrency(payments.filter((p: any) => p.applicationId === selectedApplication.id)).map((o) => (
+                        {outstandingByCurrency(appPayments).map((o) => (
                           <span key={o.currency} className="text-xs font-bold text-foreground">{formatAmount(o.total, o.currency)}</span>
                         ))}
                       </div>
                     )}
                   </>
-                )}
+                )})()}
               </div>
 
               {/* Quality Review */}
@@ -3047,8 +3251,9 @@ export default function Home() {
                   <button
                     onClick={() => {
                       setNewReviewApplicationId(selectedApplication.id);
+                      setNewReviewNotes("");
                       setReviewError(null);
-                      handleRequestReviewDirect(selectedApplication.id);
+                      setIsRequestReviewOpen(true);
                     }}
                     className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:opacity-90 cursor-pointer"
                   >
@@ -3093,14 +3298,14 @@ export default function Home() {
                             </button>
                             <button
                               disabled={reviewDecisionLoading === r.id}
-                              onClick={() => handleDecideReview(r.id, "CORRECTIONS_REQUESTED")}
+                              onClick={() => { setReviewDecisionId(r.id); setReviewDecisionAction("CORRECTIONS_REQUESTED"); setReviewDecisionNotes(""); }}
                               className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 cursor-pointer disabled:opacity-50"
                             >
                               Request Fixes
                             </button>
                             <button
                               disabled={reviewDecisionLoading === r.id}
-                              onClick={() => handleDecideReview(r.id, "REJECTED")}
+                              onClick={() => { setReviewDecisionId(r.id); setReviewDecisionAction("REJECTED"); setReviewDecisionNotes(""); }}
                               className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer disabled:opacity-50"
                             >
                               ✕ Reject
@@ -3839,6 +4044,8 @@ export default function Home() {
                           <option value="UK Tourist Visa">UK Tourist Visa</option>
                           <option value="Canada Study Permit">Canada Study Permit</option>
                           <option value="Schengen Tourist Visa">Schengen Tourist Visa</option>
+                        <option value="Schengen Study Visa">Schengen Study Visa</option>
+                        <option value="Schengen Other Visa">Schengen Other Visa</option>
                           <option value="USA B1/B2 Visa">USA B1/B2 Visa</option>
                           <option value="Australia Visitor Visa">Australia Visitor Visa</option>
                           <option value="UK Student Visa">UK Student Visa</option>
@@ -3900,6 +4107,9 @@ export default function Home() {
                           }`}>
                             {tpl.isRequired ? "Required" : "Optional"}
                           </span>
+                          {user?.role === "ADMIN" && (
+                            <button onClick={() => handleDeleteTemplate(tpl.id)} className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer">✕</button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -3938,11 +4148,14 @@ export default function Home() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
+                            {d.fileUrl && (
+                              <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 cursor-pointer no-underline">View</a>
+                            )}
                             {user?.role === "ADMIN" && d.status === "PENDING" ? (
                               <div className="flex items-center gap-1">
                                 <button
                                   onClick={() => handleVerifyDocument(d.id, "VERIFIED")}
-                                  className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer"
+                                className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer"
                                 >
                                   ✓ Verify
                                 </button>
@@ -3994,6 +4207,7 @@ export default function Home() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
+                          {d.fileUrl && (<a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 cursor-pointer no-underline">View</a>)}
                           <button
                             onClick={() => handleVerifyDocument(d.id, "VERIFIED")}
                             className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer"
@@ -4558,16 +4772,55 @@ export default function Home() {
                 <h3 className="text-lg font-bold text-foreground">Quality Review Queue</h3>
                 <p className="text-xs text-muted-foreground">Final assessment of files before embassy/portal submission.</p>
               </div>
-
-              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                <div className="h-64 flex flex-col items-center justify-center border border-dashed border-border rounded-xl bg-muted/10">
-                  <FileCheck2 className="h-8 w-8 text-muted-foreground/60 mb-2" />
-                  <p className="text-xs font-bold text-foreground">Quality Check & Approvals Queue</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Files cannot be submitted to VFS/embassy until reviewed and approved.
-                  </p>
+              {qualityReviewsLoading ? (
+                <div className="py-20 flex justify-center items-center">
+                  <div className="h-10 w-10 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
                 </div>
-              </div>
+              ) : qualityReviews.length === 0 ? (
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <div className="h-64 flex flex-col items-center justify-center border border-dashed border-border rounded-xl bg-muted/10">
+                    <FileCheck2 className="h-8 w-8 text-muted-foreground/60 mb-2" />
+                    <p className="text-xs font-bold text-foreground">No Pending Reviews</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Quality reviews submitted by staff will appear here.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {qualityReviews.map((r: any) => (
+                    <div key={r.id} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="text-sm font-bold text-foreground">{r.application?.client?.firstName} {r.application?.client?.lastName}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{r.application?.client?.fileNumber}</p>
+                          <p className="text-xs text-muted-foreground">{r.application?.serviceType}</p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          r.decision === "APPROVED" ? "bg-green-500/10 text-green-600" :
+                          r.decision === "REJECTED" ? "bg-red-500/10 text-red-500" :
+                          r.decision === "CORRECTIONS_REQUESTED" ? "bg-orange-500/10 text-orange-600" :
+                          "bg-yellow-500/10 text-yellow-600"
+                        }`}>{r.decision || "PENDING"}</span>
+                      </div>
+                      {r.notes && (
+                        <div className="bg-muted/20 rounded-xl p-3 mb-3">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Review Request Notes</p>
+                          <p className="text-xs text-foreground">{r.notes}</p>
+                        </div>
+                      )}
+                      <div className="text-[10px] text-muted-foreground mb-3">
+                        Requested by {r.reviewer?.name} · {new Date(r.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      </div>
+                      {!r.decision && (
+                        <div className="flex items-center gap-2">
+                          <button disabled={reviewDecisionLoading === r.id} onClick={() => handleDecideReview(r.id, "APPROVED")} className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer disabled:opacity-50">✓ Approve</button>
+                          <button disabled={reviewDecisionLoading === r.id} onClick={() => { setReviewDecisionId(r.id); setReviewDecisionAction("CORRECTIONS_REQUESTED"); setReviewDecisionNotes(""); }} className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 cursor-pointer disabled:opacity-50">Request Fixes</button>
+                          <button disabled={reviewDecisionLoading === r.id} onClick={() => { setReviewDecisionId(r.id); setReviewDecisionAction("REJECTED"); setReviewDecisionNotes(""); }} className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer disabled:opacity-50">✕ Reject</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -5109,6 +5362,61 @@ export default function Home() {
                     {submissionSaving ? <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> : "Save Submission"}
                   </button>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Request Review Modal */}
+          {isRequestReviewOpen && (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+              <div className="bg-card border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
+                  <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-primary" /> Request Quality Review
+                  </h4>
+                  <button onClick={() => setIsRequestReviewOpen(false)} className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer">Cancel</button>
+                </div>
+                <form onSubmit={handleRequestReview} className="p-6 space-y-4">
+                  {reviewError && (
+                    <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">{reviewError}</div>
+                  )}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase">Review Notes</label>
+                    <textarea value={newReviewNotes} onChange={(e) => setNewReviewNotes(e.target.value)} placeholder="Describe what needs review (e.g., SOP, Personal Statement, Cover Letter, or all related documents)..." rows={4} className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground resize-none" />
+                  </div>
+                  <button type="submit" disabled={reviewRequestLoading} className="w-full bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center justify-center gap-2 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50">
+                    {reviewRequestLoading ? <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> : "Submit Review Request"}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Admin Review Decision Modal */}
+          {reviewDecisionId !== null && reviewDecisionAction !== "APPROVED" && (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+              <div className="bg-card border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
+                  <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-primary" /> {reviewDecisionAction === "CORRECTIONS_REQUESTED" ? "Request Corrections" : "Reject Review"}
+                  </h4>
+                  <button onClick={() => { setReviewDecisionId(null); setReviewDecisionAction(""); setReviewDecisionNotes(""); }} className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer">Cancel</button>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase">Note for Staff</label>
+                    <textarea value={reviewDecisionNotes} onChange={(e) => setReviewDecisionNotes(e.target.value)} placeholder="Explain what needs to be corrected or why the review is being rejected..." rows={4} className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground resize-none" />
+                  </div>
+                  <button
+                    onClick={() => { if (reviewDecisionId) handleDecideReview(reviewDecisionId, reviewDecisionAction, reviewDecisionNotes || undefined); }}
+                    disabled={reviewDecisionLoading === reviewDecisionId}
+                    className={`w-full text-xs font-bold px-4 py-2.5 rounded-xl shadow-md flex items-center justify-center gap-2 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 ${
+                      reviewDecisionAction === "CORRECTIONS_REQUESTED" ? "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20" : "bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                    }`}
+                  >
+                    {reviewDecisionLoading === reviewDecisionId ? <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : `Confirm ${reviewDecisionAction === "CORRECTIONS_REQUESTED" ? "Corrections" : "Rejection"}`}
+                  </button>
+                </div>
               </div>
             </div>
           )}

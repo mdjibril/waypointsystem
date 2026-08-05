@@ -114,3 +114,39 @@ export async function PATCH(request: Request) {
     );
   }
 }
+
+// DELETE /api/documents/templates - Delete a template (admin only)
+export async function DELETE(request: Request) {
+  try {
+    const currentUser = await getCurrentUserFromCookies();
+
+    if (!currentUser || currentUser.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Only administrators can manage templates" },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Template ID is required" },
+        { status: 400 }
+      );
+    }
+
+    await prisma.documentTemplate.delete({
+      where: { id: Number(id) },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Delete template error:", error);
+    return NextResponse.json(
+      { error: "Failed to delete template" },
+      { status: 500 }
+    );
+  }
+}

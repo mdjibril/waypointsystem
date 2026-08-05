@@ -26,14 +26,13 @@ export function canManageApplications(role: string): boolean {
   return isAdmin(role);
 }
 
-// Moving an application to a new stage follows the same ownership rule as
-// canAccessClient, kept as a distinct name since it's a distinct action.
+// Only ADMIN can move applications between stages.
 export function canTransitionApplication(
   role: string,
-  clientAssignedStaffId: number | null,
-  userId: number
+  _clientAssignedStaffId: number | null,
+  _userId: number
 ): boolean {
-  return canAccessClient(role, clientAssignedStaffId, userId);
+  return isAdmin(role);
 }
 
 // Only ADMIN can create tasks.

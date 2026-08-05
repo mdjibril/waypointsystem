@@ -1456,10 +1456,10 @@ This creates:
 
 | Client | Staff | Destination | Outcome | Final Stage |
 |--------|-------|-------------|---------|-------------|
-| Benjamin Bitrus | staff@waypoint.com | United Kingdom | APPROVED | VISA_APPROVED_PATH |
-| Musa Ahmad | staff@waypoint.com | France | APPROVED | VISA_APPROVED_PATH |
-| Bilkisu Yunus | staff@waypoint.com | Saudi Arabia | APPROVED | VISA_APPROVED_PATH |
-| Fatima Kabir | staff@waypoint.com | Australia | APPROVED | VISA_APPROVED_PATH |
+| Benjamin Bitrus | staff@waypoint.com | United Kingdom | APPROVED | FOLLOW_UP |
+| Musa Ahmad | staff@waypoint.com | France | APPROVED | FOLLOW_UP |
+| Bilkisu Yunus | staff@waypoint.com | Saudi Arabia | APPROVED | FOLLOW_UP |
+| Fatima Kabir | staff@waypoint.com | Australia | APPROVED | FOLLOW_UP |
 | Keneth David | staff@waypoint.com | Canada | REFUSED | VISA_REFUSED_PATH |
 | Joshua David | user@waypoint.com | Saudi Arabia | REFUSED | VISA_REFUSED_PATH |
 | Rechael Afolabi | user@waypoint.com | United Kingdom | WITHDRAWN | DECISION |
@@ -1475,7 +1475,7 @@ All applications have complete stage history from CLIENT_INQUIRY through to thei
 2. Navigate to **Clients** tab — verify all 8 clients appear with correct staff assignments:
    - Benjamin Bitrus, Musa Ahmad, Bilkisu Yunus, Fatima Kabir, Keneth David → `Staff Officer` (staff@)
    - Joshua David, Rechael Afolabi, Okoro Prince → `user@waypoint.com`
-3. Click "View File" on Benjamin Bitrus — the client profile shows a UK Tourist Visa at `VISA_APPROVED_PATH` with stage history from CLIENT_INQUIRY through VISA_APPROVED_PATH.
+3. Click "View File" on Benjamin Bitrus — the client profile shows a UK Tourist Visa at `FOLLOW_UP` with stage history from CLIENT_INQUIRY through FLIGHT_BOOKING → PRE_DEPARTURE_BRIEFING → CLIENT_TRAVELS → FOLLOW_UP.
 4. Click "View File" on Okoro Prince — application is at `DECISION` stage with `PENDING_ACTION`.
 5. Click "View File" on Rechael Afolabi — application is at `DECISION` stage with `WITHDRAWN`.
 6. Click "View File" on Joshua David — application is at `VISA_REFUSED_PATH` with `REFUSED`.
@@ -1483,13 +1483,13 @@ All applications have complete stage history from CLIENT_INQUIRY through to thei
 ### Step 2 — Verify Pipeline Board
 
 1. Navigate to **Applications** tab.
-2. Pipeline Board shows: DECISION (2 cards), VISA_APPROVED_PATH (4), VISA_REFUSED_PATH (2).
+2. Pipeline Board shows: DECISION (2 cards), FLIGHT_BOOKING (0), PRE_DEPARTURE_BRIEFING (0), CLIENT_TRAVELS (0), FOLLOW_UP (4), VISA_REFUSED_PATH (2).
 3. Click any application card — detail page loads with full stage history.
 
 ### Step 3 — Verify Dashboard Metrics
 
 1. Navigate to **Dashboard**.
-2. Active Clients: **8**. Pipeline: 2 at DECISION, 4 at VISA_APPROVED_PATH, 2 at VISA_REFUSED_PATH.
+2. Active Clients: **8**. Pipeline: 2 at DECISION, 4 at FOLLOW_UP, 2 at VISA_REFUSED_PATH.
 3. Decision Outcomes: Approved 4, Refused 2, Pending Decision 2.
 
 ### Step 4 — Verify Reports
@@ -1529,9 +1529,10 @@ All applications have complete stage history from CLIENT_INQUIRY through to thei
 
 1. Log in as admin again.
 2. Open Okoro Prince's application detail (DECISION stage, PENDING_ACTION).
-3. Click stage dropdown → select **"VISA_APPROVED_PATH"**.
-4. Verify: Stage updates, status becomes COMPLETED.
-5. Dashboard now shows 5 Approved, 2 Refused, 1 Pending (Rechael's WITHDRAWN).
+3. Click stage dropdown → select **"FLIGHT_BOOKING"**.
+4. Click Approve button (sets decisionStatus to APPROVED, moves to FLIGHT_BOOKING).
+5. Verify: Stage updates to FLIGHT_BOOKING, status becomes COMPLETED.
+6. Dashboard now shows 5 Approved, 2 Refused, 1 Pending (Rechael's WITHDRAWN).
 
 ### Step 9 — Verify Test Suite
 
@@ -1562,7 +1563,7 @@ After completing all steps above, verify:
 - [ ] Task reassignment dropdown works for admin
 - [ ] Staff cannot see other staff's clients (only 5 of 8 visible)
 - [ ] Staff cannot reassign tasks or access admin-only tabs
-- [ ] Moving Okoro Prince from DECISION to VISA_APPROVED_PATH works
+- [ ] Moving Okoro Prince from DECISION to FLIGHT_BOOKING (Approved path) works
 - [ ] All 48 tests pass
 - [ ] Production build compiles
 
@@ -1799,9 +1800,9 @@ The Decision modal opens with outcome options.
 
 ✅ **Verify:**
 
-- Application moves to **VISA_APPROVED_PATH** stage.
+- Application moves to **FLIGHT_BOOKING** stage.
 - Status changes to `COMPLETED`.
-- Stage history shows the full path: CLIENT_INQUIRY → ... → APPLICATION_TRACKING → DECISION → VISA_APPROVED_PATH.
+- Stage history shows the full path: CLIENT_INQUIRY → ... → APPLICATION_TRACKING → DECISION → FLIGHT_BOOKING.
 - Dashboard Decision Outcomes panel now counts this approved application.
 - Reports → Visa Approval Rates by Destination reflects the new approved application for Canada.
 
@@ -1818,7 +1819,7 @@ The Decision modal opens with outcome options.
    - Quality review requested and approved
    - Submission details recorded
    - Tracking updates added
-2. **Pipeline Board** (Applications tab): Grace's application card is in the VISA_APPROVED_PATH column.
+2. **Pipeline Board** (Applications tab): Grace's application card is in the FLIGHT_BOOKING column.
 3. **Notifications**: Click the bell icon — notifications exist for task assignments.
 
 ---

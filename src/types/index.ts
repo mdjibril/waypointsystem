@@ -39,7 +39,10 @@ export type WorkflowStage =
   | "APPLICATION_SUBMISSION"
   | "APPLICATION_TRACKING"
   | "DECISION"
-  | "VISA_APPROVED_PATH"
+  | "FLIGHT_BOOKING"
+  | "PRE_DEPARTURE_BRIEFING"
+  | "CLIENT_TRAVELS"
+  | "FOLLOW_UP"
   | "VISA_REFUSED_PATH";
 
 export interface Application {

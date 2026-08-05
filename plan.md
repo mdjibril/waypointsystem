@@ -95,19 +95,36 @@ Each client file should have one active workflow stage at a time. Every stage ca
     - Record outcome: approved, refused, withdrawn, pending extra action.
     - Upload decision letter or visa copy.
 
-11. **Visa Approved Path**
-    - Flight booking.
-    - Hotel booking.
-    - Travel insurance.
-    - Pre-departure briefing.
-    - Client travels successfully.
-    - Follow-up, testimonials, and referrals.
+11. **Flight Booking** (Visa Approved Path)
+    - Search and compare flight options.
+    - Book confirmed flight ticket.
+    - Book hotel accommodation.
+    - Arrange travel insurance.
+    - Auto-generated task templates for each action.
 
-12. **Visa Refused Path**
-    - Refusal review.
-    - Identify refusal reasons.
-    - Reapply strategy.
+12. **Pre-Departure Briefing** (Visa Approved Path)
+    - Prepare briefing pack: travel guide, destination info, embassy contacts.
+    - Conduct briefing session with client.
+    - Confirm all travel documents ready.
+    - Auto-generated task templates for each action.
+
+13. **Client Travels** (Visa Approved Path)
+    - Confirm client departure and arrival.
+    - Send post-arrival check-in message.
+    - Auto-generated task templates for each action.
+
+14. **Follow-up & Testimonials** (Visa Approved Path)
+    - Send client feedback survey.
+    - Request testimonials and referrals.
+    - Close client file and archive documentation.
+    - Auto-generated task templates for each action.
+
+15. **Visa Refused Path**
+    - Review refusal reasons from embassy letter.
+    - Prepare reapplication strategy.
+    - Discuss options with client.
     - Optional new application workflow.
+    - Auto-generated task templates for each action.
 
 ## 4. Core System Modules
 

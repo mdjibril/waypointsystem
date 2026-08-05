@@ -20,3 +20,7 @@
 - When connecting to the Supabase transaction pooler (port 6543), set ssl: { rejectUnauthorized: false } in the pg.Pool config — the pooler uses self-signed certs and sslmode=no-verify in the connection string doesn't reliably pass through to pg.Pool. Confidence: 0.70
 - For Prisma migrations and DDL operations, use the Supabase session pooler (port 5432) with sslmode=require — the transaction pooler (port 6543) breaks DDL and sslmode=no-verify causes connection hangs. Confidence: 0.70
 
+# debugging
+- When making multiple code changes, verify incrementally with typecheck/build after each change instead of batch-applying many edits at once, to avoid cascading errors that are hard to trace. Confidence: 0.70
+- Before wiring a new frontend feature to an API endpoint, verify the endpoint supports the required HTTP method (e.g., check that a POST handler exists before calling fetch with method: "POST"). Confidence: 0.70
+

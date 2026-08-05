@@ -108,6 +108,16 @@ export async function POST(request: Request) {
       actorId: currentUser.id,
     });
 
+    // Create initial stage history entry
+    await prisma.applicationStageHistory.create({
+      data: {
+        applicationId: newApplication.id,
+        fromStage: null,
+        toStage: "CLIENT_INQUIRY",
+        changedById: currentUser.id,
+      },
+    });
+
     return NextResponse.json({ application: newApplication }, { status: 201 });
   } catch (error: any) {
     console.error("Create application error:", error);

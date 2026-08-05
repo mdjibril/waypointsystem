@@ -59,3 +59,43 @@ export async function GET(request: Request) {
     );
   }
 }
+
+// POST /api/activity-log - Create a custom activity log entry (stage notes, etc.)
+export async function POST(request: Request) {
+  try {
+    const currentUser = await getCurrentUserFromCookies();
+
+    if (!currentUser) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
+    const { clientId, entityType, entityId, action, description } = await request.json();
+
+    if (!clientId || !entityType || !entityId || !action) {
+      return NextResponse.json(
+        { error: "clientId, entityType, entityId, and action are required" },
+        { status: 400 }
+      );
+    }
+
+    const entry = await prisma.activityLog.create({
+      data: {
+        clientId: Number(clientId),
+        entityType,
+        entityId: Number(entityId),
+        action,
+        description: description || "",
+        actorId: currentUser.id,
+      },
+      include: { actor: { select: { id: true, name: true } } },
+    });
+
+    return NextResponse.json({ entry }, { status: 201 });
+  } catch (error: any) {
+    console.error("Create activity log error:", error);
+    return NextResponse.json(
+      { error: "Failed to create activity log entry" },
+      { status: 500 }
+    );
+  }
+}

@@ -22,7 +22,10 @@ const STAGE_ORDER = [
   "APPLICATION_SUBMISSION",
   "APPLICATION_TRACKING",
   "DECISION",
-  "VISA_APPROVED_PATH",
+  "FLIGHT_BOOKING",
+  "PRE_DEPARTURE_BRIEFING",
+  "CLIENT_TRAVELS",
+  "FOLLOW_UP",
   "VISA_REFUSED_PATH",
 ];
 
@@ -102,7 +105,7 @@ async function main() {
     let appStatus: string;
 
     if (c.outcome === "APPROVED") {
-      finalStage = "VISA_APPROVED_PATH";
+      finalStage = "FOLLOW_UP";
       decisionStatus = "APPROVED";
       appStatus = "COMPLETED";
     } else if (c.outcome === "REFUSED") {
@@ -111,7 +114,7 @@ async function main() {
       appStatus = "COMPLETED";
     } else {
       finalStage = "DECISION";
-      decisionStatus = c.outcome; // WITHDRAWN or PENDING_ACTION
+      decisionStatus = c.outcome;
       appStatus = "IN_PROGRESS";
     }
 
@@ -146,8 +149,8 @@ async function main() {
       });
     }
 
-    // If terminal, add the DECISION → terminal record
-    if (finalStage === "VISA_APPROVED_PATH" || finalStage === "VISA_REFUSED_PATH") {
+    // If terminal, add the DECISION → terminal path records
+    if (finalStage === "VISA_REFUSED_PATH") {
       await prisma.applicationStageHistory.create({
         data: {
           applicationId: app.id,
@@ -157,6 +160,21 @@ async function main() {
           note: `Decision: ${decisionStatus}`,
         },
       });
+    } else if (finalStage === "FOLLOW_UP") {
+      const approvedSeq = ["FLIGHT_BOOKING", "PRE_DEPARTURE_BRIEFING", "CLIENT_TRAVELS", "FOLLOW_UP"];
+      let from = "DECISION";
+      for (const stage of approvedSeq) {
+        await prisma.applicationStageHistory.create({
+          data: {
+            applicationId: app.id,
+            fromStage: from,
+            toStage: stage,
+            changedById: admin.id,
+            note: stage === approvedSeq[approvedSeq.length - 1] ? `Decision: ${decisionStatus}` : null,
+          },
+        });
+        from = stage;
+      }
     }
 
     console.log(`  ✓ ${c.firstName} ${c.lastName} — ${c.destinationCountry} — ${finalStage} (${decisionStatus}) — assigned to ${c.staffEmail}`);
