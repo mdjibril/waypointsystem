@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const { applicationId, notes } = await request.json();
+    const { applicationId, notes, attachmentFileName, attachmentUrl } = await request.json();
 
     if (!applicationId) {
       return NextResponse.json({ error: "Application ID is required" }, { status: 400 });
@@ -70,6 +70,8 @@ export async function POST(request: Request) {
         reviewerId: currentUser.id,
         notes: notes || null,
         documentIds: application.documents.map((d) => d.id),
+        attachmentFileName: attachmentFileName || null,
+        attachmentUrl: attachmentUrl || null,
       },
       include: {
         application: {

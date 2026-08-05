@@ -253,6 +253,7 @@ export default function Home() {
   const [isRequestReviewOpen, setIsRequestReviewOpen] = useState(false);
   const [newReviewApplicationId, setNewReviewApplicationId] = useState<number | null>(null);
   const [newReviewNotes, setNewReviewNotes] = useState("");
+  const [newReviewFile, setNewReviewFile] = useState<File | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewRequestLoading, setReviewRequestLoading] = useState(false);
   const [reviewDecisionLoading, setReviewDecisionLoading] = useState<number | null>(null);
@@ -697,18 +698,35 @@ export default function Home() {
     setReviewRequestLoading(true);
     setReviewError(null);
     try {
+      let attachmentFileName: string | undefined;
+      let attachmentUrl: string | undefined;
+
+      if (newReviewFile) {
+        attachmentFileName = newReviewFile.name;
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(newReviewFile);
+        });
+        attachmentUrl = base64;
+      }
+
       const res = await fetch("/api/quality-reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           applicationId: newReviewApplicationId,
           notes: newReviewNotes || undefined,
+          attachmentFileName,
+          attachmentUrl,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         setIsRequestReviewOpen(false);
         setNewReviewNotes("");
+        setNewReviewFile(null);
         setNewReviewApplicationId(null);
         if (selectedApplication) fetchQualityReviews(selectedApplication.id);
       } else {
@@ -3377,6 +3395,13 @@ export default function Home() {
                             <span className="text-[10px] text-muted-foreground">{r.reviewer?.name}</span>
                           </div>
                           {r.notes && <p className="text-xs text-foreground">{r.notes}</p>}
+                          {r.attachmentFileName && r.attachmentUrl && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">{r.attachmentFileName}</span>
+                              <a href={`/api/quality-reviews/${r.id}/attachment`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 cursor-pointer no-underline">View</a>
+                              <a href={`/api/quality-reviews/${r.id}/attachment`} download={r.attachmentFileName} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 cursor-pointer no-underline">Download</a>
+                            </div>
+                          )}
                           <p className="text-[9px] text-muted-foreground mt-1">{new Date(r.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
                         </div>
                         {user?.role === "ADMIN" && !r.decision && (
@@ -4902,6 +4927,16 @@ export default function Home() {
                           <p className="text-xs text-foreground">{r.notes}</p>
                         </div>
                       )}
+                      {r.attachmentFileName && r.attachmentUrl && (
+                        <div className="bg-muted/20 rounded-xl p-3 mb-3">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Attachment</p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[180px]">{r.attachmentFileName}</span>
+                            <a href={`/api/quality-reviews/${r.id}/attachment`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 cursor-pointer no-underline">View</a>
+                            <a href={`/api/quality-reviews/${r.id}/attachment`} download={r.attachmentFileName} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 cursor-pointer no-underline">Download</a>
+                          </div>
+                        </div>
+                      )}
                       <div className="text-[10px] text-muted-foreground mb-3">
                         Requested by {r.reviewer?.name} · {new Date(r.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                       </div>
@@ -5478,6 +5513,17 @@ export default function Home() {
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-muted-foreground uppercase">Review Notes</label>
                     <textarea value={newReviewNotes} onChange={(e) => setNewReviewNotes(e.target.value)} placeholder="Describe what needs review (e.g., SOP, Personal Statement, Cover Letter, or all related documents)..." rows={4} className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground resize-none" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase">Attachment (Optional)</label>
+                    <input
+                      type="file"
+                      onChange={(e) => setNewReviewFile(e.target.files?.[0] || null)}
+                      className="w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 file:cursor-pointer"
+                    />
+                    {newReviewFile && (
+                      <p className="text-[10px] text-muted-foreground">{newReviewFile.name} ({(newReviewFile.size / 1024).toFixed(0)} KB)</p>
+                    )}
                   </div>
                   <button type="submit" disabled={reviewRequestLoading} className="w-full bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center justify-center gap-2 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50">
                     {reviewRequestLoading ? <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> : "Submit Review Request"}

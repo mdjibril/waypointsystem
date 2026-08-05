@@ -224,18 +224,20 @@ model Payment {
 }
 
 model QualityReview {
-  id            Int          @id @default(autoincrement())
-  applicationId Int
-  application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  reviewerId    Int
-  reviewer      User         @relation("QualityReviewer", fields: [reviewerId], references: [id])
-  status        String       @default("PENDING")
-  decision      String?
-  notes         String?
-  documentIds   Int[]
-  decidedAt     DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                 Int          @id @default(autoincrement())
+  applicationId      Int
+  application        Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  reviewerId         Int
+  reviewer           User         @relation("QualityReviewer", fields: [reviewerId], references: [id])
+  status             String       @default("PENDING")
+  decision           String?
+  notes              String?
+  documentIds        Int[]
+  attachmentFileName String?
+  attachmentUrl      String?
+  decidedAt          DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   @@map("quality_reviews")
 }
