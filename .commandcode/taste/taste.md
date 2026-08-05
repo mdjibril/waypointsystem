@@ -24,3 +24,6 @@
 - When making multiple code changes, verify incrementally with typecheck/build after each change instead of batch-applying many edits at once, to avoid cascading errors that are hard to trace. Confidence: 0.70
 - Before wiring a new frontend feature to an API endpoint, verify the endpoint supports the required HTTP method (e.g., check that a POST handler exists before calling fetch with method: "POST"). Confidence: 0.70
 
+# document-templates
+- Support global document templates that apply to ALL service types (e.g., "Valid Passport") so they don't need to be duplicated across individual service types. Confidence: 0.75
+

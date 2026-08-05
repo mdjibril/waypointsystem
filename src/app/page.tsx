@@ -4215,8 +4215,10 @@ export default function Home() {
                         <div key={tpl.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-secondary text-xs">
                           <div>
                             <p className="font-medium text-foreground">{tpl.name}</p>
-                            {tpl.serviceType && (
+                            {tpl.serviceType ? (
                               <p className="text-[10px] text-muted-foreground">{tpl.serviceType}</p>
+                            ) : (
+                              <p className="text-[10px] font-semibold text-blue-500">🌐 All Services</p>
                             )}
                           </div>
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${

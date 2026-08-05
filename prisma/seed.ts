@@ -89,23 +89,30 @@ async function main() {
   console.log(`  ✓ ${serviceTypes.length} service types`);
 
   // Seed document templates (basic set for UK Tourist Visa)
+  // Seed global document templates (apply to ALL service types)
+  const globalDocs = [
+    { name: "Valid Passport", serviceType: null, isRequired: true, sortOrder: 1 },
+    { name: "Passport-size Photographs", serviceType: null, isRequired: true, sortOrder: 2 },
+    { name: "Proof of Residence", serviceType: null, isRequired: true, sortOrder: 3 },
+    { name: "Travel Insurance", serviceType: null, isRequired: false, sortOrder: 4 },
+  ];
+
+  for (const doc of globalDocs) {
+    await prisma.documentTemplate.create({ data: doc });
+  }
+
+  // Service-specific templates
   const ukTouristDocs = [
-    { name: "Valid Passport", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 1 },
-    { name: "Passport-size Photographs", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 2 },
-    { name: "Bank Statements (Last 6 Months)", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 3 },
-    { name: "Employment Letter", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 4 },
-    { name: "Travel Itinerary", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 5 },
-    { name: "Accommodation Booking", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 6 },
-    { name: "Travel Insurance", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 7 },
-    { name: "Proof of Residence", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 8 },
+    { name: "Bank Statements (Last 6 Months)", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 10 },
+    { name: "Employment Letter", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 11 },
+    { name: "Travel Itinerary", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 12 },
+    { name: "Accommodation Booking", serviceType: "UK Tourist Visa", isRequired: true, sortOrder: 13 },
   ];
 
   for (const doc of ukTouristDocs) {
-    await prisma.documentTemplate.create({
-      data: doc,
-    });
+    await prisma.documentTemplate.create({ data: doc });
   }
-  console.log(`  ✓ ${ukTouristDocs.length} document templates`);
+  console.log(`  ✓ ${globalDocs.length + ukTouristDocs.length} document templates`);
 
   console.log("\nSeed complete.");
 }
