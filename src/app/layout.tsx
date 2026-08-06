@@ -29,6 +29,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground transition-colors duration-200">
+        <img
+          src="/company-noBG.png"
+          alt=""
+          aria-hidden="true"
+          className="fixed inset-0 m-auto h-[60vmin] w-[60vmin] max-h-[560px] max-w-[560px] object-contain opacity-[0.14] pointer-events-none select-none -z-10"
+        />
         <AuthProvider>
           {children}
         </AuthProvider>

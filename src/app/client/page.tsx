@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import {
-  PlaneTakeoff,
   Search,
   ArrowRight,
   Clock,
@@ -87,17 +86,11 @@ export default function ClientPortal() {
 
   if (client) {
     return (
-      <div className="min-h-screen bg-background font-sans text-foreground">
+      <div className="min-h-screen font-sans text-foreground">
         {/* Header */}
         <header className="bg-card border-b border-border px-4 md:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-primary/10 p-2 rounded-xl text-primary">
-              <PlaneTakeoff className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="font-bold text-sm leading-none tracking-tight">WAY POINT</h1>
-              <span className="text-[10px] text-muted-foreground font-medium tracking-widest uppercase">Travel Ltd</span>
-            </div>
+            <img src="/company-noBG.png" alt="Way Point Travel Limited" className="h-20 w-auto object-contain" />
           </div>
           <button
             onClick={() => { setClient(null); setSearchQuery(""); setError(null); }}
@@ -228,15 +221,11 @@ export default function ClientPortal() {
   }
 
   return (
-    <div className="min-h-screen bg-background font-sans flex items-center justify-center p-4">
+    <div className="min-h-screen font-sans flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex bg-primary p-3 rounded-2xl text-primary-foreground mb-4">
-            <PlaneTakeoff className="h-8 w-8" />
-          </div>
-          <h1 className="text-2xl font-extrabold text-foreground">WAY POINT</h1>
-          <p className="text-[11px] text-muted-foreground font-semibold tracking-widest uppercase mt-0.5">Travel Ltd</p>
+          <img src="/company-noBG.png" alt="Way Point Travel Limited" className="h-44 w-auto object-contain mx-auto" />
         </div>
 
         <div className="bg-card border border-border rounded-3xl p-6 md:p-8 shadow-xl">

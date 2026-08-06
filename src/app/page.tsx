@@ -5,6 +5,7 @@ import { useAuth } from "@/context";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Dropdown } from "@/components/ui/Dropdown";
 import { 
   Users, 
   FileText, 
@@ -59,6 +60,22 @@ import { STAGE_ORDER, STAGE_LABELS, getAllowedNextStages } from "@/lib/workflow"
 import { CURRENCY_PRESETS, formatAmount } from "@/lib/currency";
 import { amountToWords } from "@/lib/numberToWords";
 import { downloadReceiptPdf } from "@/lib/receiptPdf";
+
+const SERVICE_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "UK Tourist Visa", label: "UK Tourist Visa" },
+  { value: "Canada Study Permit", label: "Canada Study Permit" },
+  { value: "Schengen Tourist Visa", label: "Schengen Tourist Visa" },
+  { value: "Schengen Study Visa", label: "Schengen Study Visa" },
+  { value: "Schengen Other Visa", label: "Schengen Other Visa" },
+  { value: "USA B1/B2 Visa", label: "USA B1/B2 Visa" },
+  { value: "Australia Visitor Visa", label: "Australia Visitor Visa" },
+  { value: "UK Student Visa", label: "UK Student Visa" },
+  { value: "Canada Visit Visa", label: "Canada Visit Visa" },
+  { value: "Canada Tourist Visa", label: "Canada Tourist Visa" },
+  { value: "UK Visit Visa", label: "UK Visit Visa" },
+  { value: "Canada Express Entry Visa", label: "Canada Express Entry Visa" },
+  { value: "Document Legalisation/Authentication", label: "Document Legalisation/Authentication" },
+];
 
 const RECEIPT_SERVICE_OPTIONS = [
   "Consultation",
@@ -1633,21 +1650,15 @@ export default function Home() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex flex-col md:flex-row bg-background font-sans relative overflow-hidden">
+      <div className="min-h-screen flex flex-col md:flex-row font-sans relative overflow-hidden">
         {/* Decorative background grid/mesh */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,var(--color-primary)_0%,transparent_60%)] opacity-10 pointer-events-none"></div>
-        <div className="absolute -left-48 -bottom-48 w-96 h-96 rounded-full bg-primary/10 blur-3xl pointer-events-none"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,var(--color-primary)_0%,transparent_60%)] opacity-10 pointer-events-none -z-20"></div>
+        <div className="absolute -left-48 -bottom-48 w-96 h-96 rounded-full bg-primary/10 blur-3xl pointer-events-none -z-20"></div>
 
         {/* Brand Left Panel */}
         <div className="hidden md:flex flex-1 flex-col justify-between p-10 md:p-16 bg-gradient-to-br from-card to-background border-r border-border relative">
           <div className="flex items-center gap-3">
-            <div className="bg-primary p-2.5 rounded-xl text-primary-foreground">
-              <Plus className="h-6 w-6 transform rotate-45" />
-            </div>
-            <div>
-              <h1 className="font-extrabold text-lg leading-none tracking-tight text-foreground">WAY POINT</h1>
-              <span className="text-[10px] text-muted-foreground font-semibold tracking-widest uppercase">Travel Ltd</span>
-            </div>
+            <img src="/company-noBG.png" alt="Way Point Travel Limited" className="h-40 w-auto object-contain" />
           </div>
 
           <div className="my-auto py-12 max-w-lg">
@@ -1685,13 +1696,7 @@ export default function Home() {
           <div className="w-full max-w-md bg-card/60 backdrop-blur-md border border-border/80 rounded-3xl p-6 sm:p-8 md:p-10 shadow-xl shadow-foreground/5 transition-all">
             {/* Mobile branding */}
             <div className="flex items-center justify-center gap-3 mb-6 md:hidden">
-              <div className="bg-primary p-2.5 rounded-xl text-primary-foreground">
-                <Plus className="h-6 w-6 transform rotate-45" />
-              </div>
-              <div>
-                <h1 className="font-extrabold text-lg leading-none tracking-tight text-foreground">WAY POINT</h1>
-                <span className="text-[10px] text-muted-foreground font-semibold tracking-widest uppercase">Travel Ltd</span>
-              </div>
+              <img src="/company-noBG.png" alt="Way Point Travel Limited" className="h-32 w-auto object-contain" />
             </div>
 
             <div className="text-center md:text-left mb-8">
@@ -1760,7 +1765,7 @@ export default function Home() {
 
   // Logged-in System Layout Shell Mockups
   return (
-    <div className="min-h-screen flex bg-background font-sans text-foreground">
+    <div className="min-h-screen flex font-sans text-foreground">
       {/* Shared Sidebar */}
       <Sidebar
         currentTab={currentTab}
@@ -2891,21 +2896,11 @@ export default function Home() {
 
                       <div className="space-y-1">
                         <label className="text-[11px] font-bold text-muted-foreground uppercase">Service Type *</label>
-                        <select
-                          required
+                        <Dropdown
                           value={newAppServiceType}
-                          onChange={(e) => setNewAppServiceType(e.target.value)}
-                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
-                        >
-                          <option value="UK Tourist Visa">UK Tourist Visa</option>
-                          <option value="Canada Study Permit">Canada Study Permit</option>
-                          <option value="Schengen Tourist Visa">Schengen Tourist Visa</option>
-                        <option value="Schengen Study Visa">Schengen Study Visa</option>
-                        <option value="Schengen Other Visa">Schengen Other Visa</option>
-                          <option value="USA B1/B2 Visa">USA B1/B2 Visa</option>
-                          <option value="Australia Visitor Visa">Australia Visitor Visa</option>
-                          <option value="UK Student Visa">UK Student Visa</option>
-                        </select>
+                          onChange={setNewAppServiceType}
+                          options={SERVICE_TYPE_OPTIONS}
+                        />
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
@@ -4296,21 +4291,11 @@ export default function Home() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-[11px] font-bold text-muted-foreground uppercase">Service Type</label>
-                        <select
+                        <Dropdown
                           value={newTemplateServiceType}
-                          onChange={(e) => setNewTemplateServiceType(e.target.value)}
-                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
-                        >
-                          <option value="">All Service Types</option>
-                          <option value="UK Tourist Visa">UK Tourist Visa</option>
-                          <option value="Canada Study Permit">Canada Study Permit</option>
-                          <option value="Schengen Tourist Visa">Schengen Tourist Visa</option>
-                        <option value="Schengen Study Visa">Schengen Study Visa</option>
-                        <option value="Schengen Other Visa">Schengen Other Visa</option>
-                          <option value="USA B1/B2 Visa">USA B1/B2 Visa</option>
-                          <option value="Australia Visitor Visa">Australia Visitor Visa</option>
-                          <option value="UK Student Visa">UK Student Visa</option>
-                        </select>
+                          onChange={setNewTemplateServiceType}
+                          options={[{ value: "", label: "All Service Types" }, ...SERVICE_TYPE_OPTIONS]}
+                        />
                       </div>
                       <div className="space-y-1">
                         <label className="text-[11px] font-bold text-muted-foreground uppercase">Destination Country</label>
