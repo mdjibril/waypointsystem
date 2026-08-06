@@ -1,16 +1,15 @@
 "use client";
 
 import React from "react";
-import { 
-  LayoutDashboard, 
-  Users, 
-  CheckSquare, 
-  FileText, 
-  CreditCard, 
+import {
+  LayoutDashboard,
+  Users,
+  CheckSquare,
+  FileText,
+  CreditCard,
   ShieldCheck,
   BarChart3,
   Settings,
-  PlaneTakeoff,
   LogOut,
   Workflow,
   X
@@ -68,15 +67,9 @@ export function Sidebar({ currentTab, setCurrentTab, isOpen, onClose }: SidebarP
       >
         <div className="flex flex-col flex-1 overflow-y-auto">
           {/* Logo Section */}
-          <div className="h-16 flex items-center justify-between gap-3 px-6 border-b border-border">
+          <div className="h-28 flex items-center justify-between gap-3 px-6 border-b border-border">
             <div className="flex items-center gap-3">
-              <div className="bg-primary/10 p-2 rounded-xl text-primary">
-                <PlaneTakeoff className="h-6 w-6" />
-              </div>
-              <div>
-                <h1 className="font-bold text-sm leading-none tracking-tight text-foreground">WAY POINT</h1>
-                <span className="text-[10px] text-muted-foreground font-medium tracking-widest uppercase">Travel Ltd</span>
-              </div>
+              <img src="/company-noBG.png" alt="Way Point Travel Limited" className="h-24 w-auto object-contain" />
             </div>
             <button
               onClick={onClose}
