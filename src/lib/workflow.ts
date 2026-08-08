@@ -40,6 +40,12 @@ export const DECISION_STAGE: WorkflowStage = "DECISION";
 
 export const TERMINAL_STAGES: WorkflowStage[] = ["CLIENT_TRAVELS", "FOLLOW_UP", "VISA_REFUSED_PATH"];
 
+export const SENSITIVE_STAGES: WorkflowStage[] = [
+  "DECISION",
+  "APPLICATION_SUBMISSION",
+  "QUALITY_REVIEW",
+];
+
 export const APPROVED_PATH_STAGES: WorkflowStage[] = [
   "FLIGHT_BOOKING",
   "PRE_DEPARTURE_BRIEFING",

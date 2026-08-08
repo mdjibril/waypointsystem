@@ -2,6 +2,9 @@
 // plain functions (role/ownership in, boolean out) makes them unit-testable
 // without needing a database or a mocked request.
 
+import { WorkflowStage } from "@/types";
+import { SENSITIVE_STAGES } from "@/lib/workflow";
+
 export function isAdmin(role: string): boolean {
   return role === "ADMIN";
 }
@@ -26,13 +29,31 @@ export function canManageApplications(role: string): boolean {
   return isAdmin(role);
 }
 
-// Only ADMIN can move applications between stages.
+// ADMIN can move any application. Assigned staff can move their own clients'
+// applications, but are blocked from transitioning into or out of sensitive
+// stages (DECISION, APPLICATION_SUBMISSION, QUALITY_REVIEW).
 export function canTransitionApplication(
   role: string,
-  _clientAssignedStaffId: number | null,
-  _userId: number
+  clientAssignedStaffId: number | null,
+  userId: number,
+  fromStage?: WorkflowStage,
+  toStage?: WorkflowStage,
 ): boolean {
-  return isAdmin(role);
+  if (isAdmin(role)) return true;
+
+  if (!canAccessClient(role, clientAssignedStaffId, userId)) return false;
+
+  const isActualStageChange = fromStage && toStage && fromStage !== toStage;
+
+  if (isActualStageChange) {
+    const isSensitiveTransition =
+      SENSITIVE_STAGES.includes(fromStage) ||
+      SENSITIVE_STAGES.includes(toStage);
+
+    if (isSensitiveTransition) return false;
+  }
+
+  return true;
 }
 
 // Only ADMIN can create tasks.

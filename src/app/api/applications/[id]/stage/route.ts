@@ -96,14 +96,14 @@ export async function POST(
       );
     }
 
-    if (!canTransitionApplication(currentUser.role, application.client.assignedStaffId, currentUser.id)) {
+    const fromStage = application.currentStage as WorkflowStage;
+
+    if (!canTransitionApplication(currentUser.role, application.client.assignedStaffId, currentUser.id, fromStage, toStage as WorkflowStage)) {
       return NextResponse.json(
         { error: "You do not have permission to move this application" },
         { status: 403 }
       );
     }
-
-    const fromStage = application.currentStage as WorkflowStage;
 
     // Decision outcomes of WITHDRAWN / PENDING_ACTION only update decisionStatus and keep the current stage.
     const isSameStageDecisionUpdate =

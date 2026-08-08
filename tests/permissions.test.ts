@@ -50,11 +50,43 @@ describe("canManageClients / canManageApplications", () => {
 });
 
 describe("canTransitionApplication", () => {
-  it("is admin-only", () => {
-    expect(canTransitionApplication("ADMIN", null, 1)).toBe(true);
-    expect(canTransitionApplication("ADMIN", 5, 5)).toBe(true);
-    expect(canTransitionApplication("STAFF", 1, 1)).toBe(false);
-    expect(canTransitionApplication("STAFF", 1, 2)).toBe(false);
+  it("lets admin move any application through any stage", () => {
+    expect(canTransitionApplication("ADMIN", null, 1, "CLIENT_INQUIRY", "CUSTOMER_SERVICE_REGISTRATION")).toBe(true);
+    expect(canTransitionApplication("ADMIN", 5, 5, "DOCUMENT_COLLECTION_VERIFICATION", "VISA_PROCESSING")).toBe(true);
+    expect(canTransitionApplication("ADMIN", null, 1, "DECISION", "FLIGHT_BOOKING")).toBe(true);
+    expect(canTransitionApplication("ADMIN", null, 1, undefined, undefined)).toBe(true);
+  });
+
+  it("lets assigned staff move their client through non-sensitive stages", () => {
+    expect(canTransitionApplication("STAFF", 5, 5, "CLIENT_INQUIRY", "CUSTOMER_SERVICE_REGISTRATION")).toBe(true);
+    expect(canTransitionApplication("STAFF", 5, 5, "DOCUMENT_COLLECTION_VERIFICATION", "VISA_PROCESSING")).toBe(true);
+    expect(canTransitionApplication("STAFF", 5, 5, "FLIGHT_BOOKING", "PRE_DEPARTURE_BRIEFING")).toBe(true);
+  });
+
+  it("blocks assigned staff from moving to a sensitive stage", () => {
+    expect(canTransitionApplication("STAFF", 5, 5, "VISA_PROCESSING", "QUALITY_REVIEW")).toBe(false);
+    expect(canTransitionApplication("STAFF", 5, 5, "PAYMENT_SERVICE_AGREEMENT", "APPLICATION_SUBMISSION")).toBe(false);
+  });
+
+  it("blocks assigned staff from moving out of a sensitive stage", () => {
+    expect(canTransitionApplication("STAFF", 5, 5, "DECISION", "FLIGHT_BOOKING")).toBe(false);
+    expect(canTransitionApplication("STAFF", 5, 5, "QUALITY_REVIEW", "APPLICATION_SUBMISSION")).toBe(false);
+  });
+
+  it("blocks staff from moving a client assigned to someone else", () => {
+    expect(canTransitionApplication("STAFF", 5, 6, "CLIENT_INQUIRY", "CUSTOMER_SERVICE_REGISTRATION")).toBe(false);
+  });
+
+  it("blocks staff from unassigned clients", () => {
+    expect(canTransitionApplication("STAFF", null, 5, "CLIENT_INQUIRY", "CUSTOMER_SERVICE_REGISTRATION")).toBe(false);
+  });
+
+  it("allows staff same-stage note updates even on sensitive stages", () => {
+    expect(canTransitionApplication("STAFF", 5, 5, "DECISION", "DECISION")).toBe(true);
+  });
+
+  it("allows staff to pass no stage info (backward-compatible, staff-owned)", () => {
+    expect(canTransitionApplication("STAFF", 5, 5)).toBe(true);
   });
 });
 
