@@ -1363,19 +1363,19 @@ Log in as admin (`admin@waypoint.com` / `password123`). For Task 5 (full workflo
    ```bash
    npm test
    ```
-   Expected output: 48 tests passed (16 permissions + 15 workflow + 17 integration).
+   Expected output: 60 tests passed (23 permissions + 20 workflow + 17 integration).
 
 2. Run the permissions test file in isolation:
    ```bash
    npx vitest run tests/permissions.test.ts
    ```
-   Expected: 16 tests pass. Covers `isAdmin`, `canAccessClient`, `canManageClients`, `canManageApplications`, `canTransitionApplication`, `canCreateTask`, `canUpdateTask`, `canVerifyDocument`, `canRecordPayment`, `canConfirmPayment`, `canDecideQualityReview`.
+   Expected: 23 tests pass. Covers `isAdmin`, `canAccessClient`, `canManageClients`, `canManageApplications`, `canTransitionApplication`, `canCreateTask`, `canUpdateTask`, `canVerifyDocument`, `canRecordPayment`, `canConfirmPayment`, `canDecideQualityReview`.
 
 3. Run the workflow test file in isolation:
    ```bash
    npx vitest run tests/workflow.test.ts
    ```
-   Expected: 15 tests pass. Covers `STAGE_ORDER` integrity, `getAllowedNextStages` for every stage (including terminal stages and DECISION), `isValidTransition` rejection of invalid moves, and `stageForDecision` outcome mapping.
+   Expected: 20 tests pass. Covers `STAGE_ORDER` integrity, `getAllowedNextStages` for every stage (including terminal stages and DECISION), `isValidTransition` rejection of invalid moves, and `stageForDecision` outcome mapping.
 
 4. Verify test files exist at `tests/permissions.test.ts` and `tests/workflow.test.ts`.
 
@@ -1400,7 +1400,7 @@ Log in as admin (`admin@waypoint.com` / `password123`). For Task 5 (full workflo
 
 2. Verify `tests/integration.test.ts` mocks `@/lib/prisma`, `next/headers`, `@/lib/activityLog`, and `@/lib/notifications` without hitting a live database.
 
-3. Run `npm test` — all 48 tests pass (unit + integration).
+3. Run `npm test` — all 60 tests pass (unit + integration).
 
 ---
 
@@ -1539,7 +1539,7 @@ All applications have complete stage history from CLIENT_INQUIRY through to thei
 ```bash
 npm test
 ```
-Expected: 48 tests pass (16 permissions + 15 workflow + 17 integration).
+Expected: 60 tests pass (23 permissions + 20 workflow + 17 integration).
 
 ### Step 10 — Build Verification
 
@@ -1564,7 +1564,7 @@ After completing all steps above, verify:
 - [ ] Staff cannot see other staff's clients (only 5 of 8 visible)
 - [ ] Staff cannot reassign tasks or access admin-only tabs
 - [ ] Moving Okoro Prince from DECISION to FLIGHT_BOOKING (Approved path) works
-- [ ] All 48 tests pass
+- [ ] All 60 tests pass
 - [ ] Production build compiles
 
 ---
@@ -1869,10 +1869,225 @@ Repeat the walkthrough with a second client to verify the REFUSED path:
    ```bash
    npm test
    ```
-   Expected: 48 tests pass.
+   Expected: **60** tests pass (23 permissions + 20 workflow + 17 integration).
 
 6. **Run production build:**
    ```bash
    npm run build
    ```
    Expected: Compiles successfully, no errors.
+
+---
+
+# Phase 12 — Test Plan: Pipeline Permission Delegation
+
+## Context
+
+Previously only ADMIN could move applications between pipeline stages. This change allows assigned STAFF to move their own clients through the pipeline, gated by a set of **sensitive stages** that remain ADMIN-only.
+
+## Setup
+
+```bash
+npm run dev
+npx prisma generate
+```
+
+Log in as admin (`admin@waypoint.com` / `password123`). Log in as staff in a separate browser window or incognito tab (`staff@waypoint.com` / `password123`).
+
+---
+
+## Task 1 — Staff can move assigned clients through non-sensitive stages
+
+### Test Steps
+
+1. Log in as admin, navigate to **Clients** tab. Register a new client: `David Nnamdi`, assign to `staff@waypoint.com`. Create a UK Tourist Visa application for this client (starts at `CLIENT_INQUIRY`).
+
+2. Log out, log in as staff (`staff@waypoint.com`). Navigate to **Clients** tab — David Nnamdi should be visible (assigned to this staff member).
+
+3. Click "View File" on David Nnamdi, click the application card to open the detail view.
+
+4. Click the stage dropdown in the header — select **"Customer Service Registration"**. Submit.
+
+   **Expected:** Stage updates to CUSTOMER_SERVICE_REGISTRATION. Status changes to IN_PROGRESS. Stage history shows the transition with the staff member as `changedBy`.
+
+   ```bash
+   # Verify via API
+   curl -s http://localhost:3000/api/applications/<app-id>/stage | jq '.history[-1]'
+   ```
+   Expected: `toStage` is `"CUSTOMER_SERVICE_REGISTRATION"`, `changedBy.name` is `"Staff Officer"`.
+
+5. Continue moving the application forward through these stages as staff:
+   - `CUSTOMER_SERVICE_REGISTRATION` → `INITIAL_CONSULTATION` ✅
+   - `INITIAL_CONSULTATION` → `PAYMENT_SERVICE_AGREEMENT` ✅
+   - `PAYMENT_SERVICE_AGREEMENT` → `DOCUMENT_COLLECTION_VERIFICATION` ✅
+   - `DOCUMENT_COLLECTION_VERIFICATION` → `VISA_PROCESSING` ✅
+
+   **Expected:** All transitions succeed. Stage history shows 6 entries total.
+
+---
+
+## Task 2 — Staff is blocked from sensitive stages
+
+### Test Steps
+
+1. With the application at `VISA_PROCESSING`, click the stage dropdown. `QUALITY_REVIEW` is the next stage (sensitive). Try selecting it.
+
+   ```bash
+   # Try via API directly
+   curl -s -X POST http://localhost:3000/api/applications/<app-id>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "QUALITY_REVIEW"}' | jq
+   ```
+   **Expected:** Returns 403 with `"You do not have permission to move this application"`.
+
+2. Log in as admin and move the application to `QUALITY_REVIEW`.
+
+3. Log back in as staff. Open the application detail — the stage is now `QUALITY_REVIEW`.
+
+4. Try to move it from `QUALITY_REVIEW` → `APPLICATION_SUBMISSION`:
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/applications/<app-id>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "APPLICATION_SUBMISSION"}' | jq
+   ```
+   **Expected:** Returns 403 — staff cannot move out of a sensitive stage either.
+
+5. Try to move it backward from `QUALITY_REVIEW` → `VISA_PROCESSING`:
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/applications/<app-id>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "VISA_PROCESSING"}' | jq
+   ```
+   **Expected:** Returns 403 — staff cannot move out of QUALITY_REVIEW at all.
+
+---
+
+## Task 3 — Staff can add same-stage notes on sensitive stages
+
+### Test Steps
+
+1. With the application at `QUALITY_REVIEW` (moved there by admin), the staff member should still be able to add a note without changing the stage.
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/applications/<app-id>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "QUALITY_REVIEW", "note": "Collected additional biometrics documents for review"}' | jq
+   ```
+   **Expected:** Returns 201. Application stage remains `QUALITY_REVIEW`. The history entry includes the note.
+
+2. Verify the note appears in stage history:
+
+   ```bash
+   curl -s http://localhost:3000/api/applications/<app-id>/stage | jq '.history[-1]'
+   ```
+   **Expected:** `fromStage` and `toStage` are both `"QUALITY_REVIEW"`, `note` is `"Collected additional biometrics documents for review"`.
+
+3. Log in as admin, move the application to `DECISION`. Log back in as staff — same note-only update should work at `DECISION`:
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/applications/<app-id>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "DECISION", "note": "Client called — awaiting embassy response"}' | jq
+   ```
+   **Expected:** Returns 201. Same-stage note added successfully.
+
+---
+
+## Task 4 — Staff cannot move another staff's clients
+
+### Test Steps
+
+1. Log in as admin. Register a second client: `Chinwe Eze`, assign to `user@waypoint.com` (or leave unassigned). Create an application.
+
+2. Log in as staff (`staff@waypoint.com`). Navigate to **Clients** — Chinwe Eze should NOT be visible.
+
+3. Try to move Chinwe's application via API (get the app ID from admin view):
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/applications/<chinwe-app-id>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "CUSTOMER_SERVICE_REGISTRATION"}' | jq
+   ```
+   **Expected:** Returns 403 with `"You do not have permission to move this application"`.
+
+---
+
+## Task 5 — Admin retains full control over all stages
+
+### Test Steps
+
+1. Log in as admin. Open David Nnamdi's application (currently at `DECISION`).
+
+2. Move from `DECISION` → `FLIGHT_BOOKING`:
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/applications/<app-id>/stage \
+     -H "Content-Type: application/json" \
+     -d '{"toStage": "FLIGHT_BOOKING"}' | jq
+   ```
+   **Expected:** Returns 200. Application moves to FLIGHT_BOOKING. Admin is never blocked from any stage.
+
+3. Navigate through all remaining stages as admin to confirm no restrictions:
+   - `FLIGHT_BOOKING` → `PRE_DEPARTURE_BRIEFING` ✅
+   - `PRE_DEPARTURE_BRIEFING` → `CLIENT_TRAVELS` ✅
+
+---
+
+## Task 6 — Sensitive stages cover the correct three stages
+
+### Test Steps
+
+1. Verify the sensitive stages set in the code:
+
+   ```bash
+   grep -A 5 "SENSITIVE_STAGES" src/lib/workflow.ts
+   ```
+   **Expected:** Contains `DECISION`, `APPLICATION_SUBMISSION`, `QUALITY_REVIEW`.
+
+2. Confirm non-sensitive stages remain open to staff — have a staff member test these transitions on an assigned client:
+   - `CLIENT_INQUIRY` → `CUSTOMER_SERVICE_REGISTRATION` ✅
+   - `INITIAL_CONSULTATION` → `PAYMENT_SERVICE_AGREEMENT` ✅
+   - `VISA_PROCESSING` → `QUALITY_REVIEW` ❌ (blocked — target is sensitive)
+   - `APPLICATION_TRACKING` → `DECISION` ❌ (blocked — target is sensitive)
+   - `DECISION` → `FLIGHT_BOOKING` ❌ (blocked — source is sensitive)
+   - `FLIGHT_BOOKING` → `PRE_DEPARTURE_BRIEFING` ✅
+
+---
+
+## Task 7 — Run unit tests for the new permission logic
+
+### Test Steps
+
+```bash
+npx vitest run tests/permissions.test.ts
+```
+
+**Expected:** 23 tests pass. Confirm these specific `canTransitionApplication` tests are present:
+
+| Test | Description |
+|------|-------------|
+| `lets admin move any application through any stage` | Admin can move through DECISION, CLIENT_INQUIRY, and with undefined params |
+| `lets assigned staff move their client through non-sensitive stages` | Staff can move CLIENT_INQUIRY→CUSTOMER_SERVICE_REGISTRATION, DOCUMENT_COLLECTION_VERIFICATION→VISA_PROCESSING, FLIGHT_BOOKING→PRE_DEPARTURE_BRIEFING |
+| `blocks assigned staff from moving to a sensitive stage` | VISA_PROCESSING→QUALITY_REVIEW and PAYMENT_SERVICE_AGREEMENT→APPLICATION_SUBMISSION blocked |
+| `blocks assigned staff from moving out of a sensitive stage` | DECISION→FLIGHT_BOOKING and QUALITY_REVIEW→APPLICATION_SUBMISSION blocked |
+| `blocks staff from moving a client assigned to someone else` | staff(5) on client assigned to staff(6) blocked |
+| `blocks staff from unassigned clients` | staff on client with null assignedStaffId blocked |
+| `allows staff same-stage note updates even on sensitive stages` | DECISION→DECISION allowed for note-only update |
+| `allows staff to pass no stage info` | Backward-compatible: `canTransitionApplication("STAFF", 5, 5)` returns true |
+
+```bash
+# Run full test suite
+npm test
+```
+**Expected:** 60 tests pass (23 permissions + 20 workflow + 17 integration).
+
+---
+
+## Task 8 — Verify production build
+
+```bash
+npm run build
+```
+**Expected:** Compiles successfully with no errors.

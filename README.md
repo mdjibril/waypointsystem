@@ -126,6 +126,7 @@ All permission checks live in `src/lib/permissions.ts` as pure functions (role/I
 
 - **ADMIN** can do everything
 - **STAFF** can only access/view assigned clients and their own tasks
+- **Pipeline transitions** — assigned STAFF can move their own clients through the pipeline, except for **sensitive stages** (`DECISION`, `APPLICATION_SUBMISSION`, `QUALITY_REVIEW`) which remain ADMIN-only. Staff can still add same-stage notes on sensitive stages.
 - Document verification, payment confirmation, and quality review decisions are admin-only
 
 ## Testing
@@ -139,8 +140,8 @@ Test suites:
 
 | File | Type | Count |
 |------|------|-------|
-| `tests/permissions.test.ts` | Unit | 16 |
-| `tests/workflow.test.ts` | Unit | 15 |
+| `tests/permissions.test.ts` | Unit | 23 |
+| `tests/workflow.test.ts` | Unit | 20 |
 | `tests/integration.test.ts` | Integration | 17 |
 
 ## Project Structure
