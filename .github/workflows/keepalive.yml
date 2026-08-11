@@ -1,0 +1,14 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase PostgreSQL
+        run: |
+          psql "${{ secrets.SUPABASE_KEEPALIVE_URL }}" -c "SELECT 1 AS keepalive;"
