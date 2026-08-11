@@ -9,5 +9,8 @@ export async function getCurrentUserFromCookies() {
   const user = await prisma.user.findUnique({
     where: { email: mockEmail },
   });
+  if (user) {
+    user.role = user.role.toUpperCase();
+  }
   return user;
 }
