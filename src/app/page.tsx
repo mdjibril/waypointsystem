@@ -527,14 +527,14 @@ export default function Home() {
 
   // Load dashboard stats
   useEffect(() => {
-    if (currentTab === "dashboard") {
+    if (currentTab === "dashboard" && isAuthenticated) {
       fetchTasks();
-      if (clients.length === 0) fetchClients();
-      if (applications.length === 0) fetchApplications();
+      fetchClients();
+      fetchApplications();
       fetchDocuments();
       fetchPayments();
     }
-  }, [currentTab]);
+  }, [currentTab, isAuthenticated]);
 
   // Load documents and templates when Documents tab is selected
   const fetchDocuments = async () => {
