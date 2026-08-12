@@ -186,6 +186,7 @@ export default function Home() {
 
   // User Profile Settings State
   const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
@@ -377,6 +378,7 @@ export default function Home() {
   useEffect(() => {
     if (user) {
       setProfileName(user.name);
+      setProfileEmail(user.email);
       setProfilePhone(user.phone || "");
     }
   }, [user]);
@@ -1153,6 +1155,9 @@ export default function Home() {
     setProfileError(null);
     setProfileSuccess(null);
 
+    const trimmedEmail = profileEmail.trim();
+    const emailChanged = trimmedEmail.toLowerCase() !== user.email.toLowerCase();
+
     try {
       const res = await fetch("/api/staff", {
         method: "PATCH",
@@ -1160,6 +1165,7 @@ export default function Home() {
         body: JSON.stringify({
           userId: user.id,
           name: profileName,
+          email: trimmedEmail,
           phone: profilePhone,
         }),
       });
@@ -1168,6 +1174,9 @@ export default function Home() {
 
       if (!res.ok) {
         setProfileError(data.error || "Failed to update profile");
+      } else if (emailChanged) {
+        alert("Your email has been updated. Please log in again with your new email address.");
+        logout();
       } else {
         setProfileSuccess("Profile updated successfully!");
         // Update local storage session cache
@@ -5477,13 +5486,16 @@ export default function Home() {
 
                     <form onSubmit={handleUpdateProfile} className="space-y-4">
                       <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Email (Read-only)</label>
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase" htmlFor="profEmail">Email Address</label>
                         <input
+                          id="profEmail"
                           type="email"
-                          disabled
-                          value={user?.email || ""}
-                          className="w-full bg-muted border border-border rounded-xl px-3 py-2 text-xs text-muted-foreground cursor-not-allowed"
+                          required
+                          value={profileEmail}
+                          onChange={(e) => setProfileEmail(e.target.value)}
+                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
                         />
+                        <p className="text-[10px] text-muted-foreground">Changing your email will log you out — sign in again with the new address.</p>
                       </div>
 
                       <div className="space-y-1">

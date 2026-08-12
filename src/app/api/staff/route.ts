@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 
@@ -74,12 +75,23 @@ export async function POST(request: Request) {
 // PATCH /api/staff - Update a staff member
 export async function PATCH(request: Request) {
   try {
-    const { userId, name, phone, role, status, password } = await request.json();
+    const { userId, name, email, phone, role, status, password } = await request.json();
 
     if (!userId) {
       return NextResponse.json(
         { error: "User ID is required" },
         { status: 400 }
+      );
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: Number(userId) },
+    });
+
+    if (!existingUser) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
       );
     }
 
@@ -92,10 +104,31 @@ export async function PATCH(request: Request) {
       updateData.passwordHash = await bcrypt.hash(password, 12);
     }
 
+    let emailChanged = false;
+    if (email !== undefined && email !== existingUser.email) {
+      const emailTaken = await prisma.user.findUnique({ where: { email } });
+      if (emailTaken) {
+        return NextResponse.json(
+          { error: "A user with this email address already exists" },
+          { status: 400 }
+        );
+      }
+      updateData.email = email;
+      emailChanged = true;
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: Number(userId) },
       data: updateData,
     });
+
+    if (emailChanged) {
+      // Changing the login email invalidates the session tied to the old address.
+      const cookieStore = await cookies();
+      if (cookieStore.get("mock-auth-user")?.value === existingUser.email) {
+        cookieStore.delete("mock-auth-user");
+      }
+    }
 
     const { passwordHash: _, ...safeUser } = updatedUser;
 
