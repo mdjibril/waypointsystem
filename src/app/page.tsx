@@ -98,19 +98,17 @@ function generateReceiptNumber(): string {
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored) {
-      const { date, count } = JSON.parse(stored);
-      if (date === dateStr) {
-        counter = count + 1;
-      }
-      // If date differs, counter resets to 1 (new day)
+      const { count } = JSON.parse(stored);
+      // Always increment — counter never resets, even on a new day
+      counter = (count || 0) + 1;
     }
     localStorage.setItem(storageKey, JSON.stringify({ date: dateStr, count: counter }));
   } catch {
     // If localStorage is unavailable, fall back to timestamp-based suffix
-    counter = Date.now() % 1000;
+    counter = Date.now() % 10000;
   }
 
-  const padded = String(counter).padStart(3, "0");
+  const padded = String(counter).padStart(4, "0");
   return `RCT-${dateStr}-${padded}`;
 }
 
