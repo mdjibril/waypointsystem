@@ -89,7 +89,27 @@ const RECEIPT_SERVICE_OPTIONS = [
 ];
 
 function generateReceiptNumber(): string {
-  return `RCT-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, ""); // e.g. "20260827"
+
+  const storageKey = "receipt_counter";
+  let counter = 1;
+
+  try {
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      const { count } = JSON.parse(stored);
+      // Always increment — counter never resets, even on a new day
+      counter = (count || 0) + 1;
+    }
+    localStorage.setItem(storageKey, JSON.stringify({ date: dateStr, count: counter }));
+  } catch {
+    // If localStorage is unavailable, fall back to timestamp-based suffix
+    counter = Date.now() % 10000;
+  }
+
+  const padded = String(counter).padStart(4, "0");
+  return `RCT-${dateStr}-${padded}`;
 }
 
 function PipelineCard({ app, draggable, onOpen }: { app: any; draggable: boolean; onOpen: () => void }) {
