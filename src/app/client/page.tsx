@@ -246,7 +246,7 @@ export default function ClientPortal() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="WP-2026-0001 or client@email.com"
+                  placeholder="WP-20260915-1427 or client@email.com"
                   className="w-full bg-muted/20 border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-foreground"
                 />
               </div>
