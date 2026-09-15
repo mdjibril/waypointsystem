@@ -256,6 +256,11 @@ export default function Home() {
   const [editClientError, setEditClientError] = useState<string | null>(null);
   const [editClientLoading, setEditClientLoading] = useState(false);
 
+  // Delete Client State
+  const [showDeleteClientModal, setShowDeleteClientModal] = useState(false);
+  const [deleteClientLoading, setDeleteClientLoading] = useState(false);
+  const [deleteClientError, setDeleteClientError] = useState<string | null>(null);
+
   // Application State
   const [applications, setApplications] = useState<any[]>([]);
   const [applicationsLoading, setApplicationsLoading] = useState(false);
@@ -1332,6 +1337,32 @@ export default function Home() {
       setEditClientError("Connection error. Please try again.");
     } finally {
       setEditClientLoading(false);
+    }
+  };
+
+  const handleDeleteClient = async () => {
+    if (!selectedClient) return;
+    setDeleteClientLoading(true);
+    setDeleteClientError(null);
+
+    try {
+      const res = await fetch(`/api/clients?id=${selectedClient.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setDeleteClientError(data.error || "Failed to delete client");
+      } else {
+        setShowDeleteClientModal(false);
+        setSelectedClient(null);
+        fetchClients();
+      }
+    } catch (err) {
+      setDeleteClientError("Connection error. Please try again.");
+    } finally {
+      setDeleteClientLoading(false);
     }
   };
 
@@ -2473,27 +2504,100 @@ export default function Home() {
                     </div>
                   </div>
                   {user?.role === "ADMIN" && (
-                  <button
-                    onClick={() => {
-                      setEditClientFirstName(selectedClient.firstName || "");
-                      setEditClientLastName(selectedClient.lastName || "");
-                      setEditClientEmail(selectedClient.email || "");
-                      setEditClientPhone(selectedClient.phone || "");
-                      setEditClientAddress(selectedClient.address || "");
-                      setEditClientPassport(selectedClient.passportNumber || "");
-                      setEditClientDob(selectedClient.dateOfBirth ? new Date(selectedClient.dateOfBirth).toISOString().split("T")[0] : "");
-                      setEditClientSource(selectedClient.source || "");
-                      setEditClientAssignedStaffId(selectedClient.assignedStaffId ? String(selectedClient.assignedStaffId) : "");
-                      setEditClientError(null);
-                      setIsEditingClient(true);
-                    }}
-                    className="bg-card border border-border text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-foreground hover:bg-secondary transition-all cursor-pointer"
-                  >
-                    <Edit className="h-3.5 w-3.5" /> Edit Profile
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditClientFirstName(selectedClient.firstName || "");
+                        setEditClientLastName(selectedClient.lastName || "");
+                        setEditClientEmail(selectedClient.email || "");
+                        setEditClientPhone(selectedClient.phone || "");
+                        setEditClientAddress(selectedClient.address || "");
+                        setEditClientPassport(selectedClient.passportNumber || "");
+                        setEditClientDob(selectedClient.dateOfBirth ? new Date(selectedClient.dateOfBirth).toISOString().split("T")[0] : "");
+                        setEditClientSource(selectedClient.source || "");
+                        setEditClientAssignedStaffId(selectedClient.assignedStaffId ? String(selectedClient.assignedStaffId) : "");
+                        setEditClientError(null);
+                        setIsEditingClient(true);
+                      }}
+                      className="bg-card border border-border text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-foreground hover:bg-secondary transition-all cursor-pointer"
+                    >
+                      <Edit className="h-3.5 w-3.5" /> Edit Profile
+                    </button>
+                    <button
+                      onClick={() => { setDeleteClientError(null); setShowDeleteClientModal(true); }}
+                      className="bg-destructive/10 border border-destructive/30 text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-destructive hover:bg-destructive/20 transition-all cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete Client
+                    </button>
+                  </div>
                   )}
                 </div>
               </div>
+
+              {/* Delete Client Confirmation Modal */}
+              {showDeleteClientModal && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                  <div className="bg-card border border-destructive/30 w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="p-6 border-b border-border flex justify-between items-center bg-destructive/5">
+                      <h4 className="font-bold text-destructive text-sm flex items-center gap-2">
+                        <Trash2 className="h-4 w-4" /> Delete Client
+                      </h4>
+                      <button
+                        onClick={() => setShowDeleteClientModal(false)}
+                        disabled={deleteClientLoading}
+                        className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                      <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-xs text-destructive font-semibold space-y-1">
+                        <p>⚠️ This action is permanent and cannot be undone.</p>
+                        <p>Deleting this client will also remove all their:</p>
+                        <ul className="list-disc list-inside mt-1 space-y-0.5 font-normal text-destructive/80">
+                          <li>Applications &amp; stage history</li>
+                          <li>Tasks, documents, and payments</li>
+                          <li>Activity logs</li>
+                        </ul>
+                      </div>
+                      <p className="text-sm text-foreground font-semibold">
+                        Are you sure you want to delete{" "}
+                        <span className="text-destructive">{selectedClient.firstName} {selectedClient.lastName}</span>{" "}
+                        <span className="font-mono text-xs text-muted-foreground">({selectedClient.fileNumber})</span>?
+                      </p>
+                      {deleteClientError && (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+                          {deleteClientError}
+                        </div>
+                      )}
+                      <div className="flex gap-3 justify-end pt-1">
+                        <button
+                          onClick={() => setShowDeleteClientModal(false)}
+                          disabled={deleteClientLoading}
+                          className="text-xs font-semibold px-4 py-2 rounded-xl border border-border bg-card hover:bg-secondary transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          id="confirm-delete-client-btn"
+                          onClick={handleDeleteClient}
+                          disabled={deleteClientLoading}
+                          className="text-xs font-bold px-4 py-2 rounded-xl bg-destructive text-white hover:bg-destructive/90 transition-all cursor-pointer disabled:opacity-60 flex items-center gap-2"
+                        >
+                          {deleteClientLoading ? (
+                            <>
+                              <span className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Deleting…
+                            </>
+                          ) : (
+                            <><Trash2 className="h-3.5 w-3.5" /> Yes, Delete Client</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Edit Client Modal */}
               {isEditingClient && (

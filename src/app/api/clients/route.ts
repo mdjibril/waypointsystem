@@ -231,3 +231,73 @@ export async function PATCH(request: Request) {
     );
   }
 }
+
+// DELETE /api/clients - Delete a client and all their data (admin only)
+export async function DELETE(request: Request) {
+  try {
+    const currentUser = await getCurrentUserFromCookies();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    if (!canManageClients(currentUser.role)) {
+      return NextResponse.json(
+        { error: "Only administrators can delete clients" },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = Number(searchParams.get("id"));
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Client ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const existingClient = await prisma.client.findUnique({ where: { id } });
+    if (!existingClient) {
+      return NextResponse.json(
+        { error: "Client not found" },
+        { status: 404 }
+      );
+    }
+
+    // Delete all related data in a transaction.
+    // Application children (stage history, quality reviews, submissions,
+    // tracking updates, document requirements) cascade automatically.
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete tasks linked to this client
+      await tx.task.deleteMany({ where: { clientId: id } });
+
+      // 2. Delete documents linked to this client
+      await tx.document.deleteMany({ where: { clientId: id } });
+
+      // 3. Delete payments linked to this client
+      await tx.payment.deleteMany({ where: { clientId: id } });
+
+      // 4. Delete activity logs linked to this client
+      await tx.activityLog.deleteMany({ where: { clientId: id } });
+
+      // 5. Delete applications (cascade deletes their children via DB constraints)
+      await tx.application.deleteMany({ where: { clientId: id } });
+
+      // 6. Finally delete the client record
+      await tx.client.delete({ where: { id } });
+    });
+
+    return NextResponse.json({ message: "Client deleted successfully" });
+  } catch (error: any) {
+    console.error("Delete client error:", error);
+    return NextResponse.json(
+      { error: "Failed to delete client" },
+      { status: 500 }
+    );
+  }
+}
