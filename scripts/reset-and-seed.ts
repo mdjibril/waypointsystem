@@ -79,12 +79,17 @@ async function main() {
     }
   }
 
-  const year = new Date().getFullYear();
   let counter = 0;
 
   for (const c of clients) {
     counter++;
-    const fileNumber = `WP-${year}-${String(counter).padStart(4, "0")}`;
+    const now = new Date(Date.now() + counter * 60000); // offset each by 1 min to keep fileNumbers unique
+    const year  = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day   = String(now.getDate()).padStart(2, "0");
+    const hour  = String(now.getHours()).padStart(2, "0");
+    const min   = String(now.getMinutes()).padStart(2, "0");
+    const fileNumber = `WP-${year}${month}${day}-${hour}${min}`;
 
     const client = await prisma.client.create({
       data: {

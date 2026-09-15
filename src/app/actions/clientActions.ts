@@ -48,9 +48,13 @@ export async function createClientAction(data: {
   assignedStaffId?: number;
 }) {
   try {
-    const year = new Date().getFullYear();
-    const count = await prisma.client.count();
-    const fileNumber = `WP-${year}-${String(count + 1).padStart(4, "0")}`;
+    const now = new Date();
+    const year  = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day   = String(now.getDate()).padStart(2, "0");
+    const hour  = String(now.getHours()).padStart(2, "0");
+    const min   = String(now.getMinutes()).padStart(2, "0");
+    const fileNumber = `WP-${year}${month}${day}-${hour}${min}`;
 
     const newClient = await prisma.client.create({
       data: {
