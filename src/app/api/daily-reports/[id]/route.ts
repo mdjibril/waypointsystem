@@ -76,3 +76,39 @@ export async function GET(
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+// DELETE /api/daily-reports/[id] – admin deletes a report
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getCurrentUserFromCookies();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (user.role.toUpperCase() !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden: Only admins can delete reports" }, { status: 403 });
+    }
+
+    const { id: rawId } = await params;
+    const id = parseInt(rawId, 10);
+    if (isNaN(id)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+
+    const existing = await prisma.dailyReport.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Report not found" }, { status: 404 });
+    }
+
+    await prisma.dailyReport.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ success: true, message: "Report deleted successfully" });
+  } catch (err) {
+    console.error("DELETE /api/daily-reports/[id] error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+

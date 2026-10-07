@@ -232,6 +232,9 @@ function AdminReportsOverview({ user }: { user: any }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportToDelete, setReportToDelete] = useState<DailyReport | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteSuccessMsg, setDeleteSuccessMsg] = useState<string | null>(null);
 
   async function refresh(date: string) {
     setLoading(true);
@@ -284,26 +287,113 @@ function AdminReportsOverview({ user }: { user: any }) {
     }
   }
 
+  async function confirmDelete() {
+    if (!reportToDelete?.id) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/daily-reports/${reportToDelete.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        if (selected?.id === reportToDelete.id) {
+          setSelected(null);
+        }
+        setReportToDelete(null);
+        setDeleteSuccessMsg("Report deleted successfully.");
+        setTimeout(() => setDeleteSuccessMsg(null), 3500);
+        refresh(filterDate);
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        alert(errJson.error || "Failed to delete report.");
+      }
+    } catch {
+      alert("Network error while deleting report.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const deleteConfirmModal = reportToDelete && (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+      <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+        <div className="flex items-center gap-3 text-destructive">
+          <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+          </div>
+          <div>
+            <h4 className="font-bold text-foreground text-sm">Delete Daily Report?</h4>
+            <p className="text-xs text-muted-foreground">This action cannot be undone.</p>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Are you sure you want to permanently delete the daily report for{" "}
+          <span className="font-semibold text-foreground">{reportToDelete.staffName}</span> on{" "}
+          <span className="font-semibold text-foreground">{reportToDelete.date}</span>?
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={() => setReportToDelete(null)}
+            className="text-xs font-bold px-4 py-2 rounded-xl border border-border bg-card hover:bg-secondary transition-colors cursor-pointer disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={confirmDelete}
+            className="text-xs font-bold px-4 py-2 rounded-xl bg-destructive text-destructive-foreground hover:opacity-90 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {deleting ? (
+              <>
+                <span className="h-3.5 w-3.5 border-2 border-destructive-foreground/30 border-t-destructive-foreground rounded-full animate-spin" />
+                Deleting…
+              </>
+            ) : (
+              <>
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete Report
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   if (selected) {
     return (
-      <StaffReportView
-        report={selected}
-        supervisorComment={supervisorComment}
-        setSupervisorComment={setSupervisorComment}
-        supervisorName={supervisorName}
-        setSupervisorName={setSupervisorName}
-        onReview={handleReview}
-        onBack={() => { setSelected(null); refresh(filterDate); }}
-        saving={saving}
-        saved={saved}
-        isAdmin
-      />
+      <>
+        <StaffReportView
+          report={selected}
+          supervisorComment={supervisorComment}
+          setSupervisorComment={setSupervisorComment}
+          supervisorName={supervisorName}
+          setSupervisorName={setSupervisorName}
+          onReview={handleReview}
+          onBack={() => { setSelected(null); refresh(filterDate); }}
+          saving={saving}
+          saved={saved}
+          isAdmin
+          onDelete={() => setReportToDelete(selected)}
+        />
+        {deleteConfirmModal}
+      </>
     );
   }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {deleteConfirmModal}
+
+      {deleteSuccessMsg && (
+        <div className="bg-green-500/10 border border-green-500/20 text-green-600 rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>{deleteSuccessMsg}</span>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-bold text-foreground">Staff Daily Reports</h3>
@@ -343,21 +433,34 @@ function AdminReportsOverview({ user }: { user: any }) {
             <button
               key={r.id}
               onClick={() => openReport(r)}
-              className="text-left bg-card border border-border rounded-2xl p-4 shadow-sm hover:border-primary/50 hover:shadow-md transition-all cursor-pointer"
+              className="text-left bg-card border border-border rounded-2xl p-4 shadow-sm hover:border-primary/50 hover:shadow-md transition-all cursor-pointer relative group"
             >
               <div className="flex justify-between items-start gap-2 mb-3">
                 <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm uppercase shrink-0">
                   {r.staffName.slice(0, 2)}
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                  r.status === "REVIEWED"
-                    ? "bg-green-500/10 text-green-600"
-                    : r.status === "SUBMITTED"
-                    ? "bg-primary/10 text-primary"
-                    : "bg-muted text-muted-foreground"
-                }`}>
-                  {r.status}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                    r.status === "REVIEWED"
+                      ? "bg-green-500/10 text-green-600"
+                      : r.status === "SUBMITTED"
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  }`}>
+                    {r.status}
+                  </span>
+                  <button
+                    type="button"
+                    title="Delete report"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReportToDelete(r);
+                    }}
+                    className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
               <p className="text-sm font-bold text-foreground">{r.staffName}</p>
               <p className="text-[10px] text-muted-foreground">{r.position} · {r.department}</p>
@@ -399,6 +502,7 @@ function StaffReportView({
   saving,
   saved,
   isAdmin,
+  onDelete,
 }: {
   report: DailyReport;
   supervisorComment: string;
@@ -410,17 +514,30 @@ function StaffReportView({
   saving: boolean;
   saved: boolean;
   isAdmin?: boolean;
+  onDelete?: () => void;
 }) {
   return (
     <div className="space-y-6 animate-in fade-in duration-200 max-w-3xl">
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="text-xs font-bold text-muted-foreground hover:text-foreground border border-border rounded-xl px-3 py-1.5 bg-card hover:bg-secondary transition-colors cursor-pointer">
-          ← Back
-        </button>
-        <div>
-          <h3 className="text-base font-bold text-foreground">{report.staffName}&apos;s Daily Report</h3>
-          <p className="text-xs text-muted-foreground">{report.date} · {report.status}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="text-xs font-bold text-muted-foreground hover:text-foreground border border-border rounded-xl px-3 py-1.5 bg-card hover:bg-secondary transition-colors cursor-pointer">
+            ← Back
+          </button>
+          <div>
+            <h3 className="text-base font-bold text-foreground">{report.staffName}&apos;s Daily Report</h3>
+            <p className="text-xs text-muted-foreground">{report.date} · {report.status}</p>
+          </div>
         </div>
+        {isAdmin && onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="text-xs font-bold text-destructive hover:bg-destructive/10 border border-destructive/30 rounded-xl px-3 py-1.5 transition-colors cursor-pointer flex items-center gap-1.5"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete Report
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
