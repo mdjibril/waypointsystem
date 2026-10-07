@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Dropdown } from "@/components/ui/Dropdown";
+import { DailyReportTab } from "@/components/DailyReportTab";
 import { 
   Users, 
   FileText, 
@@ -5730,6 +5731,11 @@ export default function Home() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ── DAILY REPORT TAB ─────────────────────────────────────────── */}
+          {currentTab === "daily-report" && (
+            <DailyReportTab user={user} staffUsers={staffUsers} />
           )}
 
           {/* Submission Details Modal */}

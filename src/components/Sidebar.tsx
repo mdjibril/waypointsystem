@@ -12,7 +12,8 @@ import {
   Settings,
   LogOut,
   Workflow,
-  X
+  X,
+  ClipboardCheck
 } from "lucide-react";
 import { useAuth } from "@/context";
 
@@ -38,6 +39,7 @@ export function Sidebar({ currentTab, setCurrentTab, isOpen, onClose }: SidebarP
     { id: "pipeline", name: "Pipeline", icon: Workflow, roles: ["ADMIN", "STAFF"] },
     { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["ADMIN", "STAFF"] },
     { id: "documents", name: "Documents", icon: FileText, roles: ["ADMIN", "STAFF"] },
+    { id: "daily-report", name: "Daily Report", icon: ClipboardCheck, roles: ["ADMIN", "STAFF"] },
     { id: "payments", name: "Payments", icon: CreditCard, roles: ["ADMIN", "STAFF"] },
     { id: "reviews", name: "Quality Review", icon: ShieldCheck, roles: ["ADMIN"] },
     { id: "reports", name: "Reports", icon: BarChart3, roles: ["ADMIN"] },
