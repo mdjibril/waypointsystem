@@ -17,6 +17,12 @@ import {
   Target,
   CalendarDays,
   RefreshCw,
+  Search,
+  LayoutGrid,
+  List,
+  Eye,
+  Clock,
+  Users,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -235,6 +241,9 @@ function AdminReportsOverview({ user }: { user: any }) {
   const [reportToDelete, setReportToDelete] = useState<DailyReport | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteSuccessMsg, setDeleteSuccessMsg] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "SUBMITTED" | "REVIEWED" | "DRAFT">("ALL");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   async function refresh(date: string) {
     setLoading(true);
@@ -312,6 +321,35 @@ function AdminReportsOverview({ user }: { user: any }) {
       setDeleting(false);
     }
   }
+
+  // Summary Metrics
+  const totalCount = reports.length;
+  const pendingReviewCount = reports.filter((r) => r.status === "SUBMITTED").length;
+  const reviewedCount = reports.filter((r) => r.status === "REVIEWED").length;
+  const draftCount = reports.filter((r) => r.status === "DRAFT").length;
+
+  const totalClients = reports.reduce((acc, r) => acc + (parseInt(r.clientsAttended || "0", 10) || 0), 0);
+  const totalVisas = reports.reduce((acc, r) => acc + (parseInt(r.visaApplications || "0", 10) || 0), 0);
+  const totalCalls = reports.reduce((acc, r) => acc + (parseInt(r.customerCalls || "0", 10) || 0), 0);
+  const totalRevenue = reports.reduce((acc, r) => {
+    const num = parseFloat((r.paymentsReceived || "0").replace(/[^0-9.]/g, ""));
+    return acc + (isNaN(num) ? 0 : num);
+  }, 0);
+
+  // Filtered reports
+  const filteredReports = reports.filter((r) => {
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch =
+      !q ||
+      r.staffName.toLowerCase().includes(q) ||
+      (r.department && r.department.toLowerCase().includes(q)) ||
+      (r.position && r.position.toLowerCase().includes(q));
+
+    const matchesStatus =
+      statusFilter === "ALL" || r.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
 
   const deleteConfirmModal = reportToDelete && (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
@@ -394,42 +432,307 @@ function AdminReportsOverview({ user }: { user: any }) {
         </div>
       )}
 
+      {/* Header & Date Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-bold text-foreground">Staff Daily Reports</h3>
-          <p className="text-xs text-muted-foreground">Review and acknowledge staff end-of-day submissions.</p>
+          <h3 className="text-xl font-bold text-foreground">Staff Daily Reports</h3>
+          <p className="text-xs text-muted-foreground">Review, manage, and sign off staff daily productivity submissions.</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFilterDate(todayStr())}
+            className={`text-xs font-bold px-3 py-2 rounded-xl border transition-all cursor-pointer ${
+              filterDate === todayStr()
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card border-border text-foreground hover:bg-secondary"
+            }`}
+          >
+            Today
+          </button>
           <input
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+            className="bg-card border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground shadow-sm"
           />
-          <button onClick={() => refresh(filterDate)} className="p-2 border border-border rounded-xl bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-            <RefreshCw className="h-3.5 w-3.5" />
+          <button
+            onClick={() => refresh(filterDate)}
+            title="Refresh reports"
+            className="p-2 border border-border rounded-xl bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer shadow-sm"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-primary" : ""}`} />
           </button>
         </div>
       </div>
 
+      {/* Daily KPI Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Reports Today</p>
+            <ClipboardCheck className="h-4 w-4 text-primary" />
+          </div>
+          <p className="text-2xl font-black text-foreground mt-2">{totalCount}</p>
+          <div className="flex items-center gap-2 mt-1 text-[10px]">
+            {pendingReviewCount > 0 ? (
+              <span className="text-amber-500 font-semibold">{pendingReviewCount} pending review</span>
+            ) : (
+              <span className="text-green-600 font-semibold">All reviewed</span>
+            )}
+            <span className="text-muted-foreground">· {reviewedCount} approved</span>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Clients Attended</p>
+            <Users className="h-4 w-4 text-primary" />
+          </div>
+          <p className="text-2xl font-black text-foreground mt-2">{totalClients}</p>
+          <p className="text-[10px] text-muted-foreground mt-1">{totalCalls} customer calls made</p>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Visas Processed</p>
+            <CheckCircle2 className="h-4 w-4 text-primary" />
+          </div>
+          <p className="text-2xl font-black text-foreground mt-2">{totalVisas}</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Logged across all staff</p>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Daily Revenue</p>
+            <BarChart2 className="h-4 w-4 text-emerald-500" />
+          </div>
+          <p className="text-2xl font-black text-foreground mt-2">₦{totalRevenue.toLocaleString()}</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Payments collected today</p>
+        </div>
+      </div>
+
+      {/* Search, Filter Pills & View Switcher */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-card border border-border rounded-2xl p-3 shadow-sm">
+        <div className="relative flex-1 max-w-md">
+          <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by staff name, department, or role…"
+            className="w-full bg-muted/20 border border-border rounded-xl pl-9 pr-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+          />
+        </div>
+
+        <div className="flex items-center flex-wrap gap-2">
+          {/* Status Filters */}
+          <div className="flex items-center bg-muted/30 p-1 rounded-xl border border-border/60">
+            {(
+              [
+                { id: "ALL", label: `All (${totalCount})` },
+                { id: "SUBMITTED", label: `Needs Review (${pendingReviewCount})` },
+                { id: "REVIEWED", label: `Reviewed (${reviewedCount})` },
+                { id: "DRAFT", label: `Draft (${draftCount})` },
+              ] as const
+            ).map((st) => (
+              <button
+                key={st.id}
+                onClick={() => setStatusFilter(st.id)}
+                className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  statusFilter === st.id
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {st.label}
+              </button>
+            ))}
+          </div>
+
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-muted/30 p-1 rounded-xl border border-border/60 ml-auto">
+            <button
+              onClick={() => setViewMode("table")}
+              title="Table view"
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === "table"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode("grid")}
+              title="Card grid view"
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === "grid"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Reports Content */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20">
+        <div className="flex flex-col items-center justify-center py-20 bg-card border border-border rounded-2xl">
           <span className="h-8 w-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-          <p className="text-xs text-muted-foreground mt-3">Loading reports…</p>
+          <p className="text-xs text-muted-foreground mt-3">Loading daily reports…</p>
         </div>
       ) : error ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="flex flex-col items-center justify-center py-20 text-center bg-card border border-border rounded-2xl p-6">
           <p className="text-sm font-semibold text-destructive">{error}</p>
         </div>
       ) : reports.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="flex flex-col items-center justify-center py-20 text-center bg-card border border-border rounded-2xl p-6">
           <ClipboardCheck className="h-10 w-10 text-muted-foreground/30 mb-3" />
-          <p className="text-sm font-semibold text-muted-foreground">No reports submitted for this date</p>
-          <p className="text-xs text-muted-foreground/70 mt-1">Staff reports will appear here once submitted.</p>
+          <p className="text-sm font-semibold text-foreground">No reports submitted for {filterDate}</p>
+          <p className="text-xs text-muted-foreground mt-1">Staff reports for this day will appear here once saved or submitted.</p>
+        </div>
+      ) : filteredReports.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center bg-card border border-border rounded-2xl p-6">
+          <Search className="h-8 w-8 text-muted-foreground/30 mb-2" />
+          <p className="text-sm font-semibold text-foreground">No reports matching your criteria</p>
+          <p className="text-xs text-muted-foreground mt-1">Try clearing your search query or status filter.</p>
+          <button
+            onClick={() => {
+              setSearchQuery("");
+              setStatusFilter("ALL");
+            }}
+            className="mt-3 text-xs font-bold text-primary hover:underline cursor-pointer"
+          >
+            Reset Filters
+          </button>
+        </div>
+      ) : viewMode === "table" ? (
+        /* ─── TABULAR VIEW ────────────────────────────────────────── */
+        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[760px]">
+              <thead>
+                <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
+                  <th className="py-3 px-4">Staff Member</th>
+                  <th className="py-3 px-3">Hours Logged</th>
+                  <th className="py-3 px-3 text-center">Tasks</th>
+                  <th className="py-3 px-3 text-center">Clients</th>
+                  <th className="py-3 px-3 text-center">Visas</th>
+                  <th className="py-3 px-3 text-center">Calls</th>
+                  <th className="py-3 px-3 text-right">Revenue</th>
+                  <th className="py-3 px-3 text-center">Status</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60 text-xs">
+                {filteredReports.map((r) => {
+                  const tasksCount = r.tasks?.filter((t) => t.description)?.length || 0;
+                  return (
+                    <tr
+                      key={r.id}
+                      onClick={() => openReport(r)}
+                      className="hover:bg-muted/30 transition-colors cursor-pointer group"
+                    >
+                      {/* Staff Member */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-xs uppercase shrink-0">
+                            {r.staffName.slice(0, 2)}
+                          </div>
+                          <div>
+                            <p className="font-bold text-foreground text-xs group-hover:text-primary transition-colors">
+                              {r.staffName}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {r.position || "Staff"} · {r.department || "Operations"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Hours */}
+                      <td className="py-3 px-3 text-muted-foreground text-[11px] whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span>{r.reportingTime || "—"} – {r.closingTime || "—"}</span>
+                        </div>
+                      </td>
+
+                      {/* Tasks Count */}
+                      <td className="py-3 px-3 text-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-foreground">
+                          {tasksCount} {tasksCount === 1 ? "task" : "tasks"}
+                        </span>
+                      </td>
+
+                      {/* Performance: Clients */}
+                      <td className="py-3 px-3 text-center font-semibold text-foreground">
+                        {r.clientsAttended || "0"}
+                      </td>
+
+                      {/* Performance: Visas */}
+                      <td className="py-3 px-3 text-center font-semibold text-foreground">
+                        {r.visaApplications || "0"}
+                      </td>
+
+                      {/* Performance: Calls */}
+                      <td className="py-3 px-3 text-center font-semibold text-foreground">
+                        {r.customerCalls || "0"}
+                      </td>
+
+                      {/* Revenue */}
+                      <td className="py-3 px-3 text-right font-bold text-foreground">
+                        ₦{r.paymentsReceived || "0"}
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1 ${
+                          r.status === "REVIEWED"
+                            ? "bg-green-500/10 text-green-600 border border-green-500/20"
+                            : r.status === "SUBMITTED"
+                            ? "bg-primary/10 text-primary border border-primary/20"
+                            : "bg-muted text-muted-foreground border border-border"
+                        }`}>
+                          {r.status === "REVIEWED" && <CheckCircle2 className="h-3 w-3" />}
+                          {r.status === "SUBMITTED" ? "Needs Review" : r.status}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => openReport(r)}
+                            className="text-xs font-bold px-2.5 py-1 rounded-lg border border-border bg-card hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <Eye className="h-3 w-3" />
+                            {r.status === "SUBMITTED" ? "Review" : "View"}
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete report"
+                            onClick={() => setReportToDelete(r)}
+                            className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
+        /* ─── CARD GRID VIEW ────────────────────────────────────────── */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {reports.map((r) => (
+          {filteredReports.map((r) => (
             <button
               key={r.id}
               onClick={() => openReport(r)}
@@ -447,7 +750,7 @@ function AdminReportsOverview({ user }: { user: any }) {
                       ? "bg-primary/10 text-primary"
                       : "bg-muted text-muted-foreground"
                   }`}>
-                    {r.status}
+                    {r.status === "SUBMITTED" ? "Needs Review" : r.status}
                   </span>
                   <button
                     type="button"
@@ -463,7 +766,7 @@ function AdminReportsOverview({ user }: { user: any }) {
                 </div>
               </div>
               <p className="text-sm font-bold text-foreground">{r.staffName}</p>
-              <p className="text-[10px] text-muted-foreground">{r.position} · {r.department}</p>
+              <p className="text-[10px] text-muted-foreground">{r.position || "Staff"} · {r.department || "Operations"}</p>
               <div className="mt-3 flex gap-3 text-[10px] text-muted-foreground">
                 <span>🕐 {r.reportingTime || "—"} – {r.closingTime || "—"}</span>
               </div>
