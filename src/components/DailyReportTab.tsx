@@ -541,6 +541,50 @@ function StaffReportView({
   );
 }
 
+const inputCls = "w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground";
+const readonlyCls = "w-full bg-muted/40 border border-border rounded-xl px-3 py-2 text-xs text-foreground cursor-not-allowed";
+const labelCls = "text-[11px] font-bold text-muted-foreground uppercase";
+
+// ─── Collapsible Section Component ───────────────────────────────────────────
+
+function Sec({
+  letter,
+  title,
+  icon,
+  isOpen,
+  onToggle,
+  children,
+}: {
+  letter: string;
+  title: string;
+  icon: React.ElementType;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border border-border rounded-2xl overflow-hidden bg-card shadow-sm">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer"
+      >
+        <SectionHeader letter={letter} title={title} icon={icon} />
+        {isOpen ? (
+          <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+        )}
+      </button>
+      {isOpen && (
+        <div className="px-5 pb-5 border-t border-border/50 pt-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
 export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
@@ -705,41 +749,6 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
     );
   }
 
-  // ── Collapsible section wrapper ─────────────────────────────────────────────
-  const Sec = ({
-    letter,
-    title,
-    icon,
-    children,
-  }: {
-    letter: string;
-    title: string;
-    icon: React.ElementType;
-    children: React.ReactNode;
-  }) => (
-    <div className="border border-border rounded-2xl overflow-hidden bg-card shadow-sm">
-      <button
-        type="button"
-        onClick={() => toggleSection(letter)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors cursor-pointer"
-      >
-        <SectionHeader letter={letter} title={title} icon={icon} />
-        {expandedSections[letter]
-          ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
-          : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
-      </button>
-      {expandedSections[letter] && (
-        <div className="px-5 pb-5 border-t border-border/50 pt-4">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-
-  const inputCls = "w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary text-foreground";
-  const readonlyCls = "w-full bg-muted/40 border border-border rounded-xl px-3 py-2 text-xs text-foreground cursor-not-allowed";
-  const labelCls = "text-[11px] font-bold text-muted-foreground uppercase";
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-4xl animate-in fade-in duration-200">
       {/* Header */}
@@ -783,7 +792,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       )}
 
       {/* SECTION A */}
-      <Sec letter="A" title="Staff Details" icon={UserCheck}>
+      <Sec letter="A" title="Staff Details" icon={UserCheck} isOpen={expandedSections.A} onToggle={() => toggleSection("A")}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className={labelCls}>Full Name</label>
@@ -813,7 +822,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       </Sec>
 
       {/* SECTION B */}
-      <Sec letter="B" title="Daily Tasks Completed" icon={CheckCircle2}>
+      <Sec letter="B" title="Daily Tasks Completed" icon={CheckCircle2} isOpen={expandedSections.B} onToggle={() => toggleSection("B")}>
         <div className="space-y-3">
           {form.tasks.map((task, i) => (
             <div key={i} className="border border-border/60 rounded-xl p-3 space-y-2 bg-muted/10">
@@ -877,7 +886,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       </Sec>
 
       {/* SECTION C */}
-      <Sec letter="C" title="Sales & Client Performance" icon={BarChart2}>
+      <Sec letter="C" title="Sales & Client Performance" icon={BarChart2} isOpen={expandedSections.C} onToggle={() => toggleSection("C")}>
         <p className="text-[10px] text-muted-foreground mb-3">Include both CRM-tracked and offline/external activities (digits only)</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
@@ -906,7 +915,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       </Sec>
 
       {/* SECTION D */}
-      <Sec letter="D" title="Daily Target vs Achievement" icon={Target}>
+      <Sec letter="D" title="Daily Target vs Achievement" icon={Target} isOpen={expandedSections.D} onToggle={() => toggleSection("D")}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className={labelCls}>Daily Target</label>
@@ -932,7 +941,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       </Sec>
 
       {/* SECTION E */}
-      <Sec letter="E" title="Customer Feedback" icon={MessageSquare}>
+      <Sec letter="E" title="Customer Feedback" icon={MessageSquare} isOpen={expandedSections.E} onToggle={() => toggleSection("E")}>
         <div className="space-y-3">
           {[
             { label: "Client Name & Feedback 1", key: "clientFeedback1" },
@@ -957,7 +966,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       </Sec>
 
       {/* SECTION F */}
-      <Sec letter="F" title="Challenges Faced Today" icon={AlertTriangle}>
+      <Sec letter="F" title="Challenges Faced Today" icon={AlertTriangle} isOpen={expandedSections.F} onToggle={() => toggleSection("F")}>
         <textarea
           rows={4}
           value={form.challenges}
@@ -968,7 +977,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       </Sec>
 
       {/* SECTION G */}
-      <Sec letter="G" title="Support Needed from Management" icon={AlertTriangle}>
+      <Sec letter="G" title="Support Needed from Management" icon={AlertTriangle} isOpen={expandedSections.G} onToggle={() => toggleSection("G")}>
         <div className="space-y-3">
           <div className="space-y-1">
             <label className={labelCls}>What support do you need?</label>
@@ -1005,7 +1014,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       </Sec>
 
       {/* SECTION H */}
-      <Sec letter="H" title="Tomorrow's Plan" icon={CalendarDays}>
+      <Sec letter="H" title="Tomorrow's Plan" icon={CalendarDays} isOpen={expandedSections.H} onToggle={() => toggleSection("H")}>
         <textarea
           rows={4}
           value={form.nextDayPlans}
@@ -1016,7 +1025,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       </Sec>
 
       {/* SECTION I */}
-      <Sec letter="I" title="Self Productivity Assessment" icon={Star}>
+      <Sec letter="I" title="Self Productivity Assessment" icon={Star} isOpen={expandedSections.I} onToggle={() => toggleSection("I")}>
         <p className="text-[10px] text-muted-foreground mb-3">Rate yourself honestly (1 = Poor, 5 = Excellent)</p>
         <div className="space-y-4">
           {SELF_LABELS.map(({ key, label }) => (
