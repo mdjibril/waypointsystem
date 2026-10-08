@@ -336,6 +336,10 @@ model DailyReport {
   challenges             String?
   supportNeeded          String?
   supportPriority        String?
+  tasksOverdue           String?
+  reasonForOverdue       String?
+  clientFollowUps        String?
+  complaintsEscalations  String?
   nextDayPlans           String?
   selfRating             Json     @default("{}")
   teamLeadReview         String?

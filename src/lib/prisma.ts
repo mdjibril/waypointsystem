@@ -2,13 +2,16 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient; prismaVersion?: number };
+
+const PRISMA_CLIENT_VERSION = 4; // Bumped to bust stale in-memory globalThis client
 
 function createPrismaClient() {
   const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL!,
-    max: 5,
-    idleTimeoutMillis: 30000,
+    max: 10,
+    idleTimeoutMillis: 20000,
+    connectionTimeoutMillis: 10000,
     ssl: { rejectUnauthorized: false },
   });
   pool.on("error", (err) => {
@@ -19,10 +22,11 @@ function createPrismaClient() {
 }
 
 export const prisma =
-  globalForPrisma.prisma && (globalForPrisma.prisma as any).dailyReport
+  globalForPrisma.prisma && globalForPrisma.prismaVersion === PRISMA_CLIENT_VERSION
     ? globalForPrisma.prisma
-    : createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+    : (() => {
+        const client = createPrismaClient();
+        globalForPrisma.prisma = client;
+        globalForPrisma.prismaVersion = PRISMA_CLIENT_VERSION;
+        return client;
+      })();

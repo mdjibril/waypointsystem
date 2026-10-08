@@ -18,7 +18,7 @@ export async function PATCH(
     const id = parseInt(rawId, 10);
     if (isNaN(id)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
 
-    const { supervisorComment, supervisorName } = await req.json();
+    const { supervisorComment, supervisorName, selfRating } = await req.json();
 
     const report = await prisma.dailyReport.update({
       where: { id },
@@ -28,6 +28,7 @@ export async function PATCH(
         reviewedById: user.id,
         status: "REVIEWED",
         reviewedAt: new Date(),
+        ...(selfRating ? { selfRating } : {}),
       },
       include: {
         staff: { select: { id: true, name: true, role: true } },

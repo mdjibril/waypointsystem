@@ -95,4 +95,41 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  /* Prevent horizontal scrollbar from appearing on mobile */
+  overflow-x: hidden;
+}
+
+/* Prevent iOS from zooming into inputs (inputs need 16px+ font) */
+input,
+select,
+textarea {
+  font-size: max(16px, 0.75rem);
+}
+
+/* But let small label-style inputs keep their look via em size override */
+input.text-xs,
+select.text-xs,
+textarea.text-xs {
+  font-size: 0.75rem;
+}
+
+/* Ensure tables never bust layout */
+table {
+  width: 100%;
+}
+
+/* Scrollbar styling for webkit */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
 }

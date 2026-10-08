@@ -1826,7 +1826,7 @@ export default function Home() {
 
   // Logged-in System Layout Shell Mockups
   return (
-    <div className="min-h-screen flex font-sans text-foreground">
+    <div className="h-screen flex overflow-hidden font-sans text-foreground">
       {/* Shared Sidebar */}
       <Sidebar
         currentTab={currentTab}
@@ -1836,7 +1836,7 @@ export default function Home() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen bg-muted/10 lg:ml-0">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-muted/10 lg:ml-0">
         <Topbar
           currentTab={currentTab}
           onNavigate={handleNotificationNavigate}
@@ -1844,7 +1844,7 @@ export default function Home() {
         />
 
         {/* Scrollable container for tab contents */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
+        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto min-w-0">
           {currentTab === "dashboard" && (
             <div className="space-y-6 md:space-y-8 animate-in fade-in duration-200">
               {/* Header Greeting */}
