@@ -147,7 +147,7 @@ export function Topbar({ currentTab, onNavigate, onMenuClick }: TopbarProps) {
       </div>
 
       {/* Search & Actions */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-2 sm:gap-4 md:gap-6">
         {/* Search Input */}
         <div className="relative w-64 hidden md:block">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -182,7 +182,7 @@ export function Topbar({ currentTab, onNavigate, onMenuClick }: TopbarProps) {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-3 w-80 bg-card border border-border rounded-2xl shadow-xl py-3 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] sm:w-80 max-w-sm bg-card border border-border rounded-2xl shadow-xl py-3 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="px-4 pb-2 border-b border-border flex justify-between items-center">
                   <span className="font-bold text-sm text-foreground">Notifications</span>
                   {unreadCount > 0 && (

@@ -31,6 +31,8 @@ model User {
   trackingUpdates   TrackingUpdate[] @relation("TrackingUpdater")
   activityLogs      ActivityLog[] @relation("ActivityLogActor")
   notifications     Notification[] @relation("NotificationRecipient")
+  dailyReports      DailyReport[] @relation("DailyReportStaff")
+  reviewedReports   DailyReport[] @relation("DailyReportReviewer")
 
   @@map("users")
 }
@@ -305,3 +307,53 @@ model Notification {
   @@index([userId, isRead])
   @@map("notifications")
 }
+
+model DailyReport {
+  id                     Int      @id @default(autoincrement())
+  date                   String   // YYYY-MM-DD
+  staffId                Int
+  staff                  User     @relation("DailyReportStaff", fields: [staffId], references: [id])
+  staffName              String
+  department             String?
+  position               String?
+  reportingTime          String?
+  closingTime            String?
+  tasks                  Json     @default("[]")
+  clientsAttended        String?
+  visaApplications       String?
+  flightBookings         String?
+  hotelReservations      String?
+  admissionApplications  String?
+  customerCalls          String?
+  newLeads               String?
+  paymentsReceived       String?
+  dailyTarget            String?
+  actualAchievement      String?
+  clientFeedback1        String?
+  clientFeedback2        String?
+  clientFeedback3        String?
+  clientRating           Int?
+  challenges             String?
+  supportNeeded          String?
+  supportPriority        String?
+  tasksOverdue           String?
+  reasonForOverdue       String?
+  clientFollowUps        String?
+  complaintsEscalations  String?
+  nextDayPlans           String?
+  selfRating             Json     @default("{}")
+  teamLeadReview         String?
+  supervisorComment      String?
+  supervisorName         String?
+  reviewedById           Int?
+  reviewedBy             User?    @relation("DailyReportReviewer", fields: [reviewedById], references: [id])
+  status                 String   @default("DRAFT")
+  submittedAt            DateTime?
+  reviewedAt             DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([staffId, date])
+  @@index([date, status])
+  @@map("daily_reports")
+}
