@@ -4,7 +4,7 @@ import pg from "pg";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient; prismaVersion?: number };
 
-const PRISMA_CLIENT_VERSION = 4; // Bumped to bust stale in-memory globalThis client
+const PRISMA_CLIENT_VERSION = 5; // Bumped to bust stale in-memory globalThis client
 
 function createPrismaClient() {
   const pool = new pg.Pool({

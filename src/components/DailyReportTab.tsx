@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ClipboardCheck,
   Plus,
@@ -27,6 +27,9 @@ import {
   FileText,
   TrendingUp,
   Calendar,
+  BookmarkPlus,
+  Copy,
+  Pencil,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -2027,13 +2030,6 @@ function StaffReportView({
         </div>
       )}
 
-      {!isAdmin && report.status === "REVIEWED" && (
-        <div className="bg-green-500/5 border border-green-500/20 rounded-2xl p-5 shadow-sm">
-          <p className="text-xs font-bold text-green-600 uppercase tracking-wider mb-2">Supervisor Feedback</p>
-          <p className="text-xs font-semibold text-foreground">{report.supervisorName}</p>
-          <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{report.supervisorComment || "Acknowledged."}</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -2084,20 +2080,232 @@ function Sec({
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
+// ─── Staff: Report Samples ───────────────────────────────────────────────────
+
+interface ReportSample {
+  id: number;
+  name: string;
+  data: Partial<DailyReport>;
+  updatedAt: string;
+}
+
+async function apiSampleRequest(
+  url: string,
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  body?: unknown
+): Promise<{ sample?: ReportSample; samples?: ReportSample[]; error?: string }> {
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: json.error || `Server responded with error ${res.status}` };
+    return json;
+  } catch (err: any) {
+    return { error: err?.message || "Network error. Please check your connection." };
+  }
+}
+
+// ─── Staff: Supervisor Feedback + Report History ─────────────────────────────
+
+function SupervisorFeedbackCard({ report }: { report: DailyReport }) {
+  if (report.status === "REVIEWED" || report.supervisorComment) {
+    return (
+      <div className="bg-green-500/5 border border-green-500/20 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-2">
+          <MessageSquare className="h-4 w-4 text-green-600" />
+          <p className="text-xs font-bold text-green-600 uppercase tracking-wider">Supervisor Feedback</p>
+        </div>
+        <p className="text-xs font-semibold text-foreground">
+          {report.supervisorName || "Supervisor"}
+          {report.reviewedAt && (
+            <span className="text-muted-foreground font-normal"> · {new Date(report.reviewedAt).toLocaleString()}</span>
+          )}
+        </p>
+        <p className="text-xs text-foreground mt-2 whitespace-pre-wrap">{report.supervisorComment || "Acknowledged."}</p>
+        {report.status === "SUBMITTED" && (
+          <p className="text-[11px] text-muted-foreground mt-2">You updated this report after it was reviewed. It is awaiting re-review.</p>
+        )}
+      </div>
+    );
+  }
+  if (report.status === "SUBMITTED") {
+    return (
+      <div className="bg-muted/20 border border-border rounded-2xl p-4 flex items-center gap-2 text-xs text-muted-foreground">
+        <Clock className="h-4 w-4 shrink-0" />
+        <span>Awaiting supervisor review. Feedback will appear here once your report has been reviewed.</span>
+      </div>
+    );
+  }
+  return null;
+}
+
+const STATUS_BADGE: Record<DailyReport["status"], string> = {
+  DRAFT: "bg-muted text-muted-foreground",
+  SUBMITTED: "bg-primary/10 text-primary",
+  REVIEWED: "bg-green-500/10 text-green-600",
+};
+
+function StaffMyReports({ user }: { user: any }) {
+  const [reports, setReports] = useState<DailyReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<DailyReport | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/daily-reports?all=true");
+      if (!res.ok) throw new Error(`Server responded with error ${res.status}`);
+      const json = await res.json();
+      setReports((json.reports || []).map((r: any) => normalizeReport(r, user, r.date)));
+    } catch (err: any) {
+      setError(err?.message || "Failed to load your reports.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (selected) {
+    return (
+      <div className="space-y-4">
+        <SupervisorFeedbackCard report={selected} />
+        <StaffReportView
+          report={selected}
+          supervisorComment={selected.supervisorComment}
+          setSupervisorComment={() => {}}
+          supervisorName={selected.supervisorName}
+          setSupervisorName={() => {}}
+          kpiRating={selected.selfRating}
+          onKpiChange={() => {}}
+          onReview={() => {}}
+          onBack={() => setSelected(null)}
+          saving={false}
+          saved={false}
+          isAdmin={false}
+        />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <span className="h-8 w-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-xs text-muted-foreground mt-3">Loading your reports…</p>
+      </div>
+    );
+  }
+
+  const reviewedCount = reports.filter((r) => r.status === "REVIEWED").length;
+
+  return (
+    <div className="space-y-4 max-w-4xl animate-in fade-in duration-200">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="text-lg font-bold text-foreground">My Reports</h3>
+          <p className="text-xs text-muted-foreground">
+            {reports.length} report{reports.length === 1 ? "" : "s"} · {reviewedCount} reviewed
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={load}
+          className="text-xs font-bold px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-secondary transition-all cursor-pointer flex items-center gap-1.5"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Refresh
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {!error && reports.length === 0 && (
+        <div className="bg-card border border-border rounded-2xl p-10 text-center">
+          <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm font-semibold text-foreground">No reports yet</p>
+          <p className="text-xs text-muted-foreground mt-1">Reports you save or submit will appear here.</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {reports.map((r) => (
+          <button
+            key={r.id ?? r.date}
+            type="button"
+            onClick={() => setSelected(r)}
+            className="w-full text-left bg-card border border-border rounded-2xl p-4 shadow-sm hover:border-primary/40 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-sm font-bold text-foreground">{formatDateLong(r.date)}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {r.tasks.filter((t) => t.description).length} task(s) · {r.clientsAttended || "0"} client(s)
+                </p>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${STATUS_BADGE[r.status]}`}>
+                {r.status === "SUBMITTED" ? "Awaiting Review" : r.status}
+              </span>
+            </div>
+            {(r.status === "REVIEWED" || r.supervisorComment) && (
+              <div className="mt-3 border-t border-border/60 pt-3 flex items-start gap-2">
+                <MessageSquare className="h-3.5 w-3.5 text-green-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-foreground line-clamp-2">
+                  <span className="font-semibold">{r.supervisorName || "Supervisor"}:</span>{" "}
+                  {r.supervisorComment || "Acknowledged."}
+                </p>
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
   const isAdmin = user?.role?.toUpperCase() === "ADMIN";
 
   const [todayReport, setTodayReport] = useState<DailyReport | null>(null);
   const [form, setForm] = useState<DailyReport>(blankReport(user, todayStr()));
   const [loadingInitial, setLoadingInitial] = useState(!isAdmin);
-  const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitDone, setSubmitDone] = useState(false);
-  const [draftSavedToast, setDraftSavedToast] = useState(false);
+  const [autoSave, setAutoSave] = useState<{ state: "idle" | "saving" | "saved" | "error"; at?: string }>({ state: "idle" });
+  // Snapshot of the form as last persisted; null until today's report has loaded.
+  const lastSavedRef = useRef<string | null>(null);
+  // Bumped on submit so a slower in-flight auto-save can't overwrite the submitted state.
+  const saveGenRef = useRef(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [staffView, setStaffView] = useState<"today" | "history" | "samples">("today");
+  const [samples, setSamples] = useState<ReportSample[]>([]);
+  const [samplesLoading, setSamplesLoading] = useState(false);
+  const [sampleModal, setSampleModal] = useState<"save" | "use" | null>(null);
+  const [sampleName, setSampleName] = useState("");
+  const [sampleBusy, setSampleBusy] = useState(false);
+  const [sampleToast, setSampleToast] = useState<string | null>(null);
+  const [sampleToDelete, setSampleToDelete] = useState<ReportSample | null>(null);
+  // When set, the form is being used to create/edit a sample instead of today's report.
+  const [editingSample, setEditingSample] = useState<{ id?: number; name: string } | null>(null);
+  const [stashedForm, setStashedForm] = useState<DailyReport | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     A: true, B: true, C: true, D: true, E: false, F: false, G: false, H: false,
   });
+
+  // True when the staff member is editing a report that has already been sent to management.
+  const isEditingSubmitted = !editingSample && !!todayReport && todayReport.status !== "DRAFT";
 
   useEffect(() => {
     if (!isAdmin && user?.id) {
@@ -2114,6 +2322,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
               saveDepartment(existing.department, user.id);
             }
             const normalized = normalizeReport(existing, user, todayStr());
+            lastSavedRef.current = JSON.stringify(normalized);
             setTodayReport(normalized);
             setForm(normalized);
             if (existing.status !== "DRAFT") setSubmitDone(true);
@@ -2124,6 +2333,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
             if (remembered) {
               fresh.department = remembered;
             }
+            lastSavedRef.current = JSON.stringify(fresh);
             setForm(fresh);
           }
         })
@@ -2163,32 +2373,133 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
     setForm({ ...form, tasks });
   }
 
-  async function handleSaveDraft() {
-    setSaving(true);
-    setErrorMessage(null);
-    if (form.department) {
-      saveDepartment(form.department, user?.id);
-    }
-    try {
-      const res = await apiSaveReport({ ...form, status: "DRAFT" }, "DRAFT");
-      if (res.report) {
-        const normalized = normalizeReport(res.report, user, todayStr());
-        setTodayReport(normalized);
-        setForm(normalized);
-        setDraftSavedToast(true);
-        setTimeout(() => setDraftSavedToast(false), 3000);
-      } else {
-        setErrorMessage(res.error || "Failed to save draft. Please check your connection.");
-      }
-    } catch {
-      setErrorMessage("Failed to save draft.");
-    } finally {
-      setSaving(false);
+  async function loadSamples() {
+    setSamplesLoading(true);
+    const res = await apiSampleRequest("/api/daily-report-samples", "GET");
+    if (res.samples) setSamples(res.samples);
+    setSamplesLoading(false);
+  }
+
+  useEffect(() => {
+    if (!isAdmin && user?.id) loadSamples();
+  }, [user?.id, isAdmin]);
+
+  function flashSampleToast(msg: string) {
+    setSampleToast(msg);
+    setTimeout(() => setSampleToast(null), 3500);
+  }
+
+  // Fill today's report with a sample's content, keeping the report's date, status and review info.
+  function applySample(sample: ReportSample) {
+    const base = submitDone && todayReport ? todayReport : form;
+    setForm(normalizeReport({ ...base, ...sample.data }, user, todayStr()));
+    setSubmitDone(false);
+    setSampleModal(null);
+    setStaffView("today");
+    flashSampleToast(`Sample "${sample.name}" applied. Review the details, then save or submit.`);
+  }
+
+  async function saveFormAsSample() {
+    const name = sampleName.trim();
+    if (!name) return;
+    setSampleBusy(true);
+    const res = await apiSampleRequest("/api/daily-report-samples", "POST", { name, data: form });
+    setSampleBusy(false);
+    if (res.sample) {
+      const saved = res.sample;
+      setSamples((prev) => [saved, ...prev]);
+      setSampleModal(null);
+      setSampleName("");
+      flashSampleToast(`Saved as sample "${saved.name}". Find it under My Samples.`);
+    } else {
+      setErrorMessage(res.error || "Failed to save sample.");
+      setSampleModal(null);
     }
   }
 
+  function startEditSample(sample: ReportSample | null) {
+    setStashedForm(form);
+    setForm(normalizeReport({ ...blankReport(user, todayStr()), ...(sample?.data ?? {}) }, user, todayStr()));
+    setEditingSample({ id: sample?.id, name: sample?.name ?? "" });
+    setErrorMessage(null);
+  }
+
+  function exitSampleEdit() {
+    if (stashedForm) setForm(stashedForm);
+    setStashedForm(null);
+    setEditingSample(null);
+    setErrorMessage(null);
+    setStaffView("samples");
+  }
+
+  async function saveEditedSample() {
+    if (!editingSample) return;
+    const name = editingSample.name.trim();
+    if (!name) {
+      setErrorMessage("Please give the sample a name.");
+      return;
+    }
+    setSampleBusy(true);
+    const res = editingSample.id
+      ? await apiSampleRequest(`/api/daily-report-samples/${editingSample.id}`, "PATCH", { name, data: form })
+      : await apiSampleRequest("/api/daily-report-samples", "POST", { name, data: form });
+    setSampleBusy(false);
+    if (!res.sample) {
+      setErrorMessage(res.error || "Failed to save sample.");
+      return;
+    }
+    const saved = res.sample;
+    setSamples((prev) => [saved, ...prev.filter((x) => x.id !== saved.id)]);
+    exitSampleEdit();
+    flashSampleToast(`Sample "${saved.name}" saved.`);
+  }
+
+  async function confirmDeleteSample() {
+    if (!sampleToDelete) return;
+    const target = sampleToDelete;
+    setSampleBusy(true);
+    const res = await apiSampleRequest(`/api/daily-report-samples/${target.id}`, "DELETE");
+    setSampleBusy(false);
+    if (res.error) {
+      setErrorMessage(res.error);
+    } else {
+      setSamples((prev) => prev.filter((x) => x.id !== target.id));
+      flashSampleToast(`Sample "${target.name}" deleted.`);
+    }
+    setSampleToDelete(null);
+  }
+
+  // Auto-save today's report as a draft shortly after the staff member stops typing.
+  // Reports already sent to management are only updated via "Update Report".
+  useEffect(() => {
+    if (isAdmin || loadingInitial || editingSample || submitDone || isEditingSubmitted || submitting) return;
+    const snapshot = JSON.stringify(form);
+    if (lastSavedRef.current === null || snapshot === lastSavedRef.current) return;
+
+    const gen = saveGenRef.current;
+    const timer = setTimeout(async () => {
+      setAutoSave({ state: "saving" });
+      if (form.department) saveDepartment(form.department, user?.id);
+      const res = await apiSaveReport(form, "DRAFT");
+      if (gen !== saveGenRef.current) return;
+      if (res.report) {
+        lastSavedRef.current = snapshot;
+        setTodayReport(normalizeReport(res.report, user, todayStr()));
+        setAutoSave({ state: "saved", at: nowTime() });
+      } else {
+        setAutoSave({ state: "error" });
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [form, isAdmin, loadingInitial, editingSample, submitDone, isEditingSubmitted, submitting, user]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (editingSample) {
+      await saveEditedSample();
+      return;
+    }
+    saveGenRef.current++;
     setSubmitting(true);
     setErrorMessage(null);
     if (form.department) {
@@ -2204,6 +2515,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       );
       if (res.report) {
         const normalized = normalizeReport(res.report, user, todayStr());
+        lastSavedRef.current = JSON.stringify(normalized);
         setTodayReport(normalized);
         setForm(normalized);
         setSubmitDone(true);
@@ -2221,6 +2533,250 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
     return <AdminReportsOverview user={user} />;
   }
 
+  const sampleToastEl = sampleToast && (
+    <div className="bg-green-500/10 border border-green-500/20 text-green-600 rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center gap-2 animate-in fade-in max-w-4xl">
+      <CheckCircle2 className="h-4 w-4 shrink-0" />
+      <span>{sampleToast}</span>
+    </div>
+  );
+
+  const modalBackdrop = "fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150";
+  const modalCard = "bg-card border border-border rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4";
+  const btnSecondary = "text-xs font-bold px-4 py-2 rounded-xl border border-border bg-card hover:bg-secondary transition-colors cursor-pointer disabled:opacity-50";
+  const btnPrimary = "text-xs font-bold px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5";
+  const btnGhost = "text-xs font-semibold px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer flex items-center gap-1.5";
+
+  const sampleModals = (
+    <>
+      {sampleModal === "save" && (
+        <div className={modalBackdrop}>
+          <form
+            className={modalCard}
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveFormAsSample();
+            }}
+          >
+            <div>
+              <h4 className="font-bold text-foreground text-sm">Save as Sample</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Saves what you have filled in so you can reuse it for future reports. Today&apos;s report is not affected.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <label className={labelCls}>Sample Name</label>
+              <input
+                autoFocus
+                value={sampleName}
+                onChange={(e) => setSampleName(e.target.value)}
+                placeholder="e.g. Regular visa desk day"
+                maxLength={100}
+                className={inputCls}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setSampleModal(null)} disabled={sampleBusy} className={btnSecondary}>
+                Cancel
+              </button>
+              <button type="submit" disabled={sampleBusy || !sampleName.trim()} className={btnPrimary}>
+                <BookmarkPlus className="h-3.5 w-3.5" />
+                {sampleBusy ? "Saving…" : "Save Sample"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {sampleModal === "use" && (
+        <div className={modalBackdrop}>
+          <div className={modalCard}>
+            <div>
+              <h4 className="font-bold text-foreground text-sm">Use a Sample</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                The sample&apos;s details will replace what is currently in the form. You can still edit everything before submitting.
+              </p>
+            </div>
+            {samples.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">
+                You have no samples yet. Fill in the form and click <b>Save as Sample</b> to create one.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {samples.map((sm) => (
+                  <div
+                    key={sm.id}
+                    className="flex items-center border border-border rounded-xl hover:border-primary/50 hover:bg-primary/5 transition-colors"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => applySample(sm)}
+                      className="flex-1 min-w-0 text-left px-3 py-2.5 cursor-pointer"
+                    >
+                      <p className="text-xs font-bold text-foreground truncate">{sm.name}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {(sm.data.tasks || []).filter((t) => t?.description).length} task(s) · updated{" "}
+                        {new Date(sm.updatedAt).toLocaleDateString()}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSampleToDelete(sm)}
+                      title={`Delete "${sm.name}"`}
+                      aria-label={`Delete sample ${sm.name}`}
+                      className="p-2 mr-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setSampleModal(null)} className={btnSecondary}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sampleToDelete && (
+        <div className={modalBackdrop}>
+          <div className={modalCard}>
+            <h4 className="font-bold text-foreground text-sm">Delete sample?</h4>
+            <p className="text-xs text-muted-foreground">
+              &quot;{sampleToDelete.name}&quot; will be permanently deleted. Reports you already filled from it are not affected.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setSampleToDelete(null)} disabled={sampleBusy} className={btnSecondary}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteSample}
+                disabled={sampleBusy}
+                className="text-xs font-bold px-4 py-2 rounded-xl bg-destructive text-destructive-foreground hover:opacity-90 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {sampleBusy ? "Deleting…" : "Delete Sample"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  if (editingSample) {
+    return (
+      <div className="space-y-4">
+        {renderForm()}
+        {sampleModals}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 bg-muted/30 border border-border rounded-xl p-1 w-fit flex-wrap">
+        {([
+          { id: "today", label: "Today's Report", icon: ClipboardCheck },
+          { id: "history", label: "My Reports & Feedback", icon: MessageSquare },
+          { id: "samples", label: `My Samples (${samples.length})`, icon: Copy },
+        ] as const).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setStaffView(t.id)}
+            className={`text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${
+              staffView === t.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <t.icon className="h-3.5 w-3.5" />
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {sampleToastEl}
+      {staffView === "history" ? <StaffMyReports user={user} /> : staffView === "samples" ? renderSamples() : renderToday()}
+      {sampleModals}
+    </div>
+  );
+
+  function renderSamples() {
+    return (
+      <div className="space-y-4 max-w-4xl animate-in fade-in duration-200">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-lg font-bold text-foreground">My Samples</h3>
+            <p className="text-xs text-muted-foreground">
+              Reusable report content. Use one to pre-fill a new daily report, or edit it for next time.
+            </p>
+          </div>
+          <button type="button" onClick={() => startEditSample(null)} className={btnPrimary}>
+            <Plus className="h-3.5 w-3.5" /> New Sample
+          </button>
+        </div>
+
+        {errorMessage && (
+          <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {samplesLoading && samples.length === 0 ? (
+          <div className="flex justify-center py-12">
+            <span className="h-6 w-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          </div>
+        ) : samples.length === 0 ? (
+          <div className="bg-card border border-border rounded-2xl p-10 text-center">
+            <Copy className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm font-semibold text-foreground">No samples yet</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Fill in today&apos;s report and click <b>Save as Sample</b>, or create one with <b>New Sample</b>.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {samples.map((sm) => {
+              const taskNames = (sm.data.tasks || []).map((t) => t?.description).filter(Boolean);
+              return (
+                <div key={sm.id} className="bg-card border border-border rounded-2xl p-4 shadow-sm flex flex-col gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-foreground">{sm.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {sm.data.department || "No department"} · updated {new Date(sm.updatedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2 flex-1">
+                    {taskNames.length > 0 ? taskNames.join(" · ") : "No tasks in this sample."}
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <button type="button" onClick={() => applySample(sm)} className={btnPrimary}>
+                      <Copy className="h-3.5 w-3.5" /> Use for Today
+                    </button>
+                    <button type="button" onClick={() => startEditSample(sm)} className={`${btnSecondary} flex items-center gap-1.5`}>
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSampleToDelete(sm)}
+                      className="text-xs font-bold px-3 py-2 rounded-xl border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderToday() {
   if (loadingInitial) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
@@ -2233,18 +2789,31 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
   if (submitDone && todayReport && todayReport.status !== "DRAFT") {
     return (
       <div className="max-w-3xl space-y-6 animate-in fade-in duration-200">
-        <div className="bg-green-500/5 border border-green-500/20 rounded-2xl p-6 flex items-start gap-4">
-          <CheckCircle2 className="h-6 w-6 text-green-500 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold text-foreground">Report Submitted Successfully</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Your daily productivity report for {todayReport.date} has been sent to management.
-            </p>
-            {todayReport.status === "REVIEWED" && (
-              <p className="text-xs text-green-600 font-semibold mt-1">✓ Reviewed by supervisor</p>
-            )}
+        <div className="bg-green-500/5 border border-green-500/20 rounded-2xl p-6 flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-4">
+            <CheckCircle2 className="h-6 w-6 text-green-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-foreground">Report Submitted Successfully</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Your daily productivity report for {todayReport.date} has been sent to management.
+              </p>
+              {todayReport.status === "REVIEWED" && (
+                <p className="text-xs text-green-600 font-semibold mt-1">✓ Reviewed by supervisor</p>
+              )}
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setForm(todayReport);
+              setSubmitDone(false);
+            }}
+            className="text-xs font-bold px-4 py-2 rounded-xl border border-border bg-card hover:bg-secondary transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <FileText className="h-3.5 w-3.5" /> Edit Report
+          </button>
         </div>
+        <SupervisorFeedbackCard report={todayReport} />
         <StaffReportView
           report={todayReport}
           supervisorComment={todayReport.supervisorComment}
@@ -2258,12 +2827,9 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
           onKpiChange={() => {}}
           onReview={() => {}}
           onBack={() => {
+            // Return to the form with the submitted data still filled in, ready to edit.
+            setForm(todayReport);
             setSubmitDone(false);
-            setTodayReport(null);
-            const fresh = blankReport(user, todayStr());
-            const remembered = getSavedDepartment(user?.id);
-            if (remembered) fresh.department = remembered;
-            setForm(fresh);
           }}
           saving={false}
           saved={false}
@@ -2273,39 +2839,73 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
     );
   }
 
+  return renderForm();
+  }
+
+  function formStatusChip() {
+    const chip = (label: string, cls: string) => (
+      <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md ${cls}`}>{label}</span>
+    );
+    if (editingSample) return chip("Sample", "bg-muted text-muted-foreground");
+    if (!todayReport) return null;
+    if (todayReport.status === "REVIEWED") return chip("Reviewed", STATUS_BADGE.REVIEWED);
+    if (todayReport.status === "SUBMITTED") return chip("Submitted · Awaiting review", STATUS_BADGE.SUBMITTED);
+    return chip("Draft saved", STATUS_BADGE.DRAFT);
+  }
+
+  function renderForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-4xl animate-in fade-in duration-200">
       {/* Header */}
-      <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
-        <div>
-          <h3 className="text-lg font-bold text-foreground">Daily Productivity Report</h3>
-          <p className="text-xs text-muted-foreground">Way Point Travel Limited · {todayStr()}</p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-lg font-bold text-foreground">
+              {editingSample ? (editingSample.id ? "Edit Sample" : "New Sample") : "Daily Productivity Report"}
+            </h3>
+            {formStatusChip()}
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {editingSample
+              ? "Samples are for reuse only and are never sent to management."
+              : `Way Point Travel Limited · ${formatDateLong(todayStr())}`}
+          </p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={handleSaveDraft}
-            disabled={saving}
-            className="flex-1 sm:flex-none text-xs font-bold px-4 py-2 rounded-xl border border-border bg-card hover:bg-secondary transition-all cursor-pointer disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save Draft"}
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="flex-1 sm:flex-none text-xs font-bold px-4 py-2 rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/10 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
-          >
-            <Send className="h-3.5 w-3.5" />
-            {submitting ? "Submitting…" : "Submit to Management"}
-          </button>
-        </div>
+        {!editingSample && (
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setSampleModal("use")} className={btnGhost}>
+              <Copy className="h-3.5 w-3.5" /> Use sample
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSampleName("");
+                setSampleModal("save");
+              }}
+              className={btnGhost}
+            >
+              <BookmarkPlus className="h-3.5 w-3.5" /> Save as sample
+            </button>
+          </div>
+        )}
       </div>
 
-      {draftSavedToast && (
-        <div className="bg-green-500/10 border border-green-500/20 text-green-600 rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>Draft saved successfully. You can continue editing anytime today.</span>
+      {editingSample && (
+        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-1">
+          <label className={labelCls}>Sample Name</label>
+          <input
+            autoFocus
+            value={editingSample.name}
+            onChange={(e) => setEditingSample({ ...editingSample, name: e.target.value })}
+            placeholder="e.g. Regular visa desk day"
+            maxLength={100}
+            className={inputCls}
+          />
         </div>
+      )}
+
+      {isEditingSubmitted && todayReport && (todayReport.status === "REVIEWED" || todayReport.supervisorComment) && (
+        <SupervisorFeedbackCard report={todayReport} />
       )}
 
       {errorMessage && (
@@ -2609,25 +3209,59 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
 
 
 
-      {/* Sticky Submit bar */}
-      <div className="sticky bottom-0 bg-background/90 backdrop-blur border-t border-border py-3 flex flex-col sm:flex-row justify-end gap-2 -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
-        <button
-          type="button"
-          onClick={handleSaveDraft}
-          disabled={saving}
-          className="text-xs font-bold px-4 py-2.5 rounded-xl border border-border bg-card hover:bg-secondary transition-all cursor-pointer disabled:opacity-50 sm:w-auto w-full"
-        >
-          {saving ? "Saving…" : "Save Draft"}
-        </button>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="text-xs font-bold px-6 py-2.5 rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/10 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 sm:w-auto w-full"
-        >
-          <Send className="h-3.5 w-3.5" />
-          {submitting ? "Submitting…" : "Submit to Management"}
-        </button>
+      {/* Sticky action bar */}
+      <div className="sticky bottom-4 z-20 pt-2">
+        <div className="bg-card/95 backdrop-blur border border-border rounded-2xl shadow-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+          <p className={`text-xs sm:mr-auto ${autoSave.state === "error" && !editingSample && !isEditingSubmitted ? "text-destructive" : "text-muted-foreground"}`}>
+            {editingSample
+              ? "Save this sample to reuse it on any future report."
+              : isEditingSubmitted
+                ? todayReport?.status === "REVIEWED"
+                  ? "Updating a reviewed report sends it back to your supervisor for re-review."
+                  : "Your changes are only sent when you click Update Report."
+                : autoSave.state === "saving"
+                  ? "Saving draft…"
+                  : autoSave.state === "saved"
+                    ? `Draft saved automatically at ${autoSave.at}.`
+                    : autoSave.state === "error"
+                      ? "Couldn't save your draft. Check your connection; it will retry when you make a change."
+                      : "Your progress is saved automatically as you type."}
+          </p>
+          <div className="flex gap-2">
+            {editingSample ? (
+              <>
+                <button type="button" onClick={exitSampleEdit} disabled={sampleBusy} className={`flex-1 sm:flex-none ${btnSecondary}`}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={sampleBusy} className={`flex-1 sm:flex-none justify-center ${btnPrimary}`}>
+                  <BookmarkPlus className="h-3.5 w-3.5" />
+                  {sampleBusy ? "Saving…" : "Save Sample"}
+                </button>
+              </>
+            ) : (
+              <>
+                {isEditingSubmitted && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (todayReport) setForm(todayReport);
+                      setSubmitDone(true);
+                    }}
+                    className={`flex-1 sm:flex-none ${btnSecondary}`}
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button type="submit" disabled={submitting} className={`flex-1 sm:flex-none justify-center ${btnPrimary}`}>
+                  <Send className="h-3.5 w-3.5" />
+                  {submitting ? "Submitting…" : isEditingSubmitted ? "Update Report" : "Submit to Management"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </form>
   );
+  }
 }
