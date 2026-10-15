@@ -101,6 +101,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "date is required" }, { status: 400 });
     }
 
+    // Once a report has been submitted, a draft save must not pull it back out of the admin's view.
+    const existing = await prisma.dailyReport.findUnique({
+      where: { staffId_date: { staffId: user.id, date } },
+      select: { status: true },
+    });
+    const effectiveStatus =
+      existing && existing.status !== "DRAFT" && status !== "SUBMITTED"
+        ? existing.status
+        : status || "DRAFT";
+
     const baseData = {
       staffName: user.name,
       department: department || null,
@@ -128,8 +138,8 @@ export async function POST(req: NextRequest) {
       nextDayPlans: nextDayPlans || null,
       selfRating: selfRating ?? {},
       teamLeadReview: teamLeadReview || null,
-      status: status || "DRAFT",
-      submittedAt: status === "SUBMITTED" ? new Date() : undefined,
+      status: effectiveStatus,
+      submittedAt: effectiveStatus === "SUBMITTED" ? new Date() : undefined,
     };
 
     const newFields = {
