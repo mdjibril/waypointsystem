@@ -33,6 +33,7 @@ model User {
   notifications     Notification[] @relation("NotificationRecipient")
   dailyReports      DailyReport[] @relation("DailyReportStaff")
   reviewedReports   DailyReport[] @relation("DailyReportReviewer")
+  dailyReportSamples DailyReportSample[]
 
   @@map("users")
 }
@@ -356,4 +357,18 @@ model DailyReport {
   @@unique([staffId, date])
   @@index([date, status])
   @@map("daily_reports")
-}
+}
+
+// Reusable report content a staff member saves and applies to new daily reports
+model DailyReportSample {
+  id        Int      @id @default(autoincrement())
+  staffId   Int
+  staff     User     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  name      String
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([staffId])
+  @@map("daily_report_samples")
+}
