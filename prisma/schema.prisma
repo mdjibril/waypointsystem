@@ -52,15 +52,38 @@ model WorkflowStage {
 }
 
 model ServiceType {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  slug        String   @unique
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            Int                   @id @default(autoincrement())
+  name          String                @unique
+  slug          String                @unique
+  description   String?
+  category      String                @default("VISA")
+  sortOrder     Int                   @default(0)
+  isActive      Boolean               @default(true)
+  workflowSteps ServiceWorkflowStep[]
+  applications  Application[]
+  phases        ApplicationPhase[]
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
 
   @@map("service_types")
+}
+
+// One step of a service's route. stage is a WorkflowStage key from src/lib/workflow.ts;
+// branch is MAIN, APPROVED (after a positive decision) or REFUSED.
+model ServiceWorkflowStep {
+  id            Int         @id @default(autoincrement())
+  serviceTypeId Int
+  serviceType   ServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+  stage         String
+  branch        String      @default("MAIN")
+  label         String?
+  order         Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([serviceTypeId, stage])
+  @@index([serviceTypeId, order])
+  @@map("service_workflow_steps")
 }
 
 model DocumentTemplate {
@@ -130,6 +153,15 @@ model Application {
   clientId           Int
   client             Client   @relation(fields: [clientId], references: [id])
   serviceType        String
+  serviceTypeId      Int?
+  serviceTypeRef     ServiceType? @relation(fields: [serviceTypeId], references: [id])
+  // Snapshot of the service's route when the application was created: { steps: RouteStep[] }.
+  // Null for applications created before service workflows (they follow the standard visa route).
+  workflowRoute      Json?
+  // Which service stage the application is on (1 = first service; each service added after the
+  // previous route finished is the next stage). Finished stages are kept in ApplicationPhase.
+  phase              Int      @default(1)
+  completedPhases    ApplicationPhase[]
   destinationCountry String
   travelPurpose      String
   expectedTravelDate DateTime?
@@ -195,12 +227,33 @@ model ApplicationStageHistory {
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   fromStage     String?
   toStage       String
+  phase         Int         @default(1)
   changedById   Int
   changedBy     User        @relation("StageHistoryChangedBy", fields: [changedById], references: [id])
   note          String?
   createdAt     DateTime    @default(now())
 
   @@map("application_stage_history")
+}
+
+// A finished service stage of an application, archived when the next service is added
+model ApplicationPhase {
+  id             Int          @id @default(autoincrement())
+  applicationId  Int
+  application    Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  phase          Int
+  serviceType    String
+  serviceTypeId  Int?
+  serviceTypeRef ServiceType? @relation(fields: [serviceTypeId], references: [id])
+  workflowRoute  Json?
+  finalStage     String
+  status         String
+  decisionStatus String?
+  startedAt      DateTime
+  completedAt    DateTime     @default(now())
+
+  @@unique([applicationId, phase])
+  @@map("application_phases")
 }
 
 model Payment {

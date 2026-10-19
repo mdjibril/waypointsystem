@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
+import { syncDefaultServiceWorkflows } from "../src/lib/serviceTypes";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -67,26 +68,9 @@ async function main() {
   }
   console.log(`  ✓ ${stages.length} workflow stages`);
 
-  // Seed service types
-  const serviceTypes = [
-    { name: "UK Tourist Visa", slug: "uk-tourist-visa", description: "Standard Visitor visa for tourism, family visits, or business." },
-    { name: "Canada Study Permit", slug: "canada-study-permit", description: "Study permit for post-secondary education in Canada." },
-    { name: "Schengen Tourist Visa", slug: "schengen-tourist-visa", description: "Short-stay visa for tourism in the Schengen Area." },
-    { name: "Schengen Study Visa", slug: "schengen-study-visa", description: "Long-stay visa for academic studies in the Schengen Area." },
-    { name: "Schengen Other Visa", slug: "schengen-other-visa", description: "Other short or long-stay visa for the Schengen Area." },
-    { name: "USA B1/B2 Visa", slug: "usa-b1-b2-visa", description: "Business/tourism visa for the United States." },
-    { name: "Australia Visitor Visa", slug: "australia-visitor-visa", description: "Visitor visa for tourism or business visits to Australia." },
-    { name: "UK Student Visa", slug: "uk-student-visa", description: "Student visa for academic studies in the UK." },
-  ];
-
-  for (const service of serviceTypes) {
-    await prisma.serviceType.upsert({
-      where: { slug: service.slug },
-      update: {},
-      create: service,
-    });
-  }
-  console.log(`  ✓ ${serviceTypes.length} service types`);
+  // Seed service types with their workflow routes
+  const { createdServices, seededRoutes } = await syncDefaultServiceWorkflows(prisma);
+  console.log(`  ✓ ${createdServices} service types, ${seededRoutes} workflow routes`);
 
   // Seed document templates (basic set for UK Tourist Visa)
   // Seed global document templates (apply to ALL service types)

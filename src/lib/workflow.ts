@@ -1,5 +1,7 @@
 import { WorkflowStage } from "@/types";
 
+// The original 15-stage visa route. Applications created before service-based
+// workflows (no stored route) follow this, as do services without their own route.
 export const STAGE_ORDER: WorkflowStage[] = [
   "CLIENT_INQUIRY",
   "CUSTOMER_SERVICE_REGISTRATION",
@@ -18,6 +20,34 @@ export const STAGE_ORDER: WorkflowStage[] = [
   "VISA_REFUSED_PATH",
 ];
 
+// Stages that only appear in some service routes
+export const SERVICE_SPECIFIC_STAGES: WorkflowStage[] = [
+  "DOCUMENT_ACCEPTED",
+  "DOCUMENT_REVIEWED",
+  "DOCUMENT_VERIFIED",
+  "APPLICATION_INITIATED",
+  "APPLICATION_PROCESSED",
+  "APPLICATION_COMPLETED",
+  "IMMIGRATION_PATHWAY_DETERMINED",
+  "MEDICAL_DOCUMENT_SUBMITTED",
+  "MEDICAL_DOCUMENT_REVIEWED",
+  "SPECIALIST_REVIEW_INITIATED",
+  "SPECIALIST_REVIEW_COMPLETED",
+  "COST_QUOTATION_DETERMINED",
+  "INITIAL_DEPOSIT_COMPLETED",
+  "CONSULTATION_INITIATED",
+  "QUOTATION_SENT",
+  "AWAITING_ORGANIZATION_DECISION",
+  "QUOTATION_APPROVED",
+  "SERVICE_APPLICATION_INITIATED",
+  "SERVICE_APPLICATION_COMPLETED",
+  "OUTCOME_GRANTED",
+  "OUTCOME_DENIED",
+];
+
+// Every stage a service route can be built from
+export const ALL_STAGES: WorkflowStage[] = [...STAGE_ORDER, ...SERVICE_SPECIFIC_STAGES];
+
 export const STAGE_LABELS: Record<WorkflowStage, string> = {
   CLIENT_INQUIRY: "Client Inquiry",
   CUSTOMER_SERVICE_REGISTRATION: "Customer Service Registration",
@@ -34,6 +64,27 @@ export const STAGE_LABELS: Record<WorkflowStage, string> = {
   CLIENT_TRAVELS: "Client Travels",
   FOLLOW_UP: "Follow-up & Testimonials",
   VISA_REFUSED_PATH: "Visa Refused Path",
+  DOCUMENT_ACCEPTED: "Document Accepted",
+  DOCUMENT_REVIEWED: "Document Reviewed",
+  DOCUMENT_VERIFIED: "Document Verified",
+  APPLICATION_INITIATED: "Application Initiated",
+  APPLICATION_PROCESSED: "Application Processed",
+  APPLICATION_COMPLETED: "Application Completed",
+  IMMIGRATION_PATHWAY_DETERMINED: "Immigration Pathway Determined",
+  MEDICAL_DOCUMENT_SUBMITTED: "Medical Document Submitted",
+  MEDICAL_DOCUMENT_REVIEWED: "Medical Document Reviewed",
+  SPECIALIST_REVIEW_INITIATED: "Specialist Review Initiated",
+  SPECIALIST_REVIEW_COMPLETED: "Specialist Review Completed",
+  COST_QUOTATION_DETERMINED: "Cost Quotation Determined",
+  INITIAL_DEPOSIT_COMPLETED: "Initial Deposit Completed",
+  CONSULTATION_INITIATED: "Consultation Initiated",
+  QUOTATION_SENT: "Quotation Sent",
+  AWAITING_ORGANIZATION_DECISION: "Awaiting Organization Decision",
+  QUOTATION_APPROVED: "Quotation Approved",
+  SERVICE_APPLICATION_INITIATED: "Service Application Initiated",
+  SERVICE_APPLICATION_COMPLETED: "Service Application Completed",
+  OUTCOME_GRANTED: "Granted",
+  OUTCOME_DENIED: "Denied",
 };
 
 export const DECISION_STAGE: WorkflowStage = "DECISION";
@@ -53,55 +104,196 @@ export const APPROVED_PATH_STAGES: WorkflowStage[] = [
   "FOLLOW_UP",
 ];
 
-const DECISION_INDEX = STAGE_ORDER.indexOf(DECISION_STAGE);
+// ---------------------------------------------------------------------------
+// Service routes
+//
+// A route is an ordered list of steps. MAIN steps run in order; if the route
+// contains DECISION it must be the last MAIN step, and the route then splits
+// into an APPROVED branch and a REFUSED branch. Routes without DECISION are a
+// single straight line (e.g. document legalisation, flight booking).
+// ---------------------------------------------------------------------------
 
-export function getAllowedNextStages(current: WorkflowStage): WorkflowStage[] {
+export type RouteBranch = "MAIN" | "APPROVED" | "REFUSED";
+
+export interface RouteStep {
+  stage: WorkflowStage;
+  branch: RouteBranch;
+  label?: string | null;
+}
+
+export interface WorkflowRoute {
+  steps: RouteStep[];
+}
+
+export const STANDARD_VISA_ROUTE: WorkflowRoute = {
+  steps: [
+    ...STAGE_ORDER.slice(0, STAGE_ORDER.indexOf(DECISION_STAGE) + 1).map((stage) => ({ stage, branch: "MAIN" as const })),
+    ...APPROVED_PATH_STAGES.map((stage) => ({ stage, branch: "APPROVED" as const })),
+    { stage: "VISA_REFUSED_PATH", branch: "REFUSED" },
+  ],
+};
+
+export function isWorkflowStage(value: unknown): value is WorkflowStage {
+  return typeof value === "string" && (ALL_STAGES as string[]).includes(value);
+}
+
+// Reads a stored route (Application.workflowRoute JSON); anything missing or malformed
+// falls back to the standard visa route so older applications keep working.
+export function parseRoute(raw: unknown): WorkflowRoute {
+  const steps = (raw as { steps?: unknown } | null | undefined)?.steps;
+  if (!Array.isArray(steps) || steps.length === 0) return STANDARD_VISA_ROUTE;
+  const parsed: RouteStep[] = (steps as { stage?: unknown; branch?: unknown; label?: unknown }[])
+    .filter((s): s is { stage: WorkflowStage; branch?: unknown; label?: unknown } => isWorkflowStage(s?.stage))
+    .map((s) => ({
+      stage: s.stage,
+      branch: s.branch === "APPROVED" || s.branch === "REFUSED" ? s.branch : "MAIN",
+      label: typeof s.label === "string" && s.label.trim() ? s.label.trim() : null,
+    }));
+  return parsed.length > 0 ? { steps: parsed } : STANDARD_VISA_ROUTE;
+}
+
+export function branchSteps(route: WorkflowRoute, branch: RouteBranch): WorkflowStage[] {
+  return route.steps.filter((s) => s.branch === branch).map((s) => s.stage);
+}
+
+export function routeStages(route: WorkflowRoute): WorkflowStage[] {
+  return route.steps.map((s) => s.stage);
+}
+
+export function routeHasDecision(route: WorkflowRoute): boolean {
+  return branchSteps(route, "MAIN").includes(DECISION_STAGE);
+}
+
+export function firstStage(route: WorkflowRoute): WorkflowStage {
+  return branchSteps(route, "MAIN")[0] ?? "CLIENT_INQUIRY";
+}
+
+export function stageLabel(stage: string, route?: WorkflowRoute): string {
+  const custom = route?.steps.find((s) => s.stage === stage)?.label;
+  return custom || STAGE_LABELS[stage as WorkflowStage] || stage;
+}
+
+// Returns a list of problems with a route definition; empty means it is valid.
+export function validateRoute(route: WorkflowRoute): string[] {
+  const errors: string[] = [];
+  const stages = routeStages(route);
+  const main = branchSteps(route, "MAIN");
+  const approved = branchSteps(route, "APPROVED");
+  const refused = branchSteps(route, "REFUSED");
+
+  if (main.length === 0) errors.push("The route needs at least one main step.");
+  if (new Set(stages).size !== stages.length) errors.push("A stage can only appear once in a route.");
+  if (stages.some((s) => !isWorkflowStage(s))) errors.push("The route contains an unknown stage.");
+  if (approved.includes(DECISION_STAGE) || refused.includes(DECISION_STAGE)) {
+    errors.push("Decision must be a main step.");
+  }
+
+  if (main.includes(DECISION_STAGE)) {
+    if (main[main.length - 1] !== DECISION_STAGE) errors.push("Decision must be the last main step.");
+    if (approved.length === 0) errors.push("A route with a decision needs at least one approved step.");
+    if (refused.length === 0) errors.push("A route with a decision needs at least one refused step.");
+  } else if (approved.length > 0 || refused.length > 0) {
+    errors.push("Approved and refused steps are only allowed when the route has a Decision step.");
+  }
+
+  return errors;
+}
+
+export function getAllowedNextStages(current: WorkflowStage, route: WorkflowRoute = STANDARD_VISA_ROUTE): WorkflowStage[] {
+  const step = route.steps.find((s) => s.stage === current);
+  if (!step) {
+    // Stage is not on this route (e.g. route changed); allow re-entering the route at its start
+    return [firstStage(route)];
+  }
+
+  const main = branchSteps(route, "MAIN");
+
   if (current === DECISION_STAGE) {
-    return ["FLIGHT_BOOKING", "VISA_REFUSED_PATH", "APPLICATION_TRACKING"];
+    const idx = main.indexOf(current);
+    return [
+      branchSteps(route, "APPROVED")[0],
+      branchSteps(route, "REFUSED")[0],
+      main[idx - 1],
+    ].filter(Boolean) as WorkflowStage[];
   }
 
-  if (current === "FLIGHT_BOOKING") {
-    return ["PRE_DEPARTURE_BRIEFING", DECISION_STAGE];
-  }
-
-  if (current === "PRE_DEPARTURE_BRIEFING") {
-    return ["CLIENT_TRAVELS", "FLIGHT_BOOKING"];
-  }
-
-  if (current === "CLIENT_TRAVELS" || current === "FOLLOW_UP") {
-    return ["FOLLOW_UP", DECISION_STAGE];
-  }
-
-  if (current === "VISA_REFUSED_PATH") {
-    return [DECISION_STAGE];
-  }
-
-  if (TERMINAL_STAGES.includes(current)) {
-    return [DECISION_STAGE];
-  }
-
-  const idx = STAGE_ORDER.indexOf(current);
   const next: WorkflowStage[] = [];
 
-  if (idx < DECISION_INDEX) {
-    next.push(STAGE_ORDER[idx + 1]);
-  }
-  if (idx > 0) {
-    next.push(STAGE_ORDER[idx - 1]);
+  if (step.branch === "MAIN") {
+    const idx = main.indexOf(current);
+    if (idx < main.length - 1) next.push(main[idx + 1]);
+    if (idx > 0) next.push(main[idx - 1]);
+    return next;
   }
 
+  // Approved or refused branch: step along the branch; the decision can always be revisited
+  const branch = branchSteps(route, step.branch);
+  const idx = branch.indexOf(current);
+  if (idx < branch.length - 1) next.push(branch[idx + 1]);
+  next.push(idx > 0 ? branch[idx - 1] : DECISION_STAGE);
+  if (!next.includes(DECISION_STAGE)) next.push(DECISION_STAGE);
   return next;
 }
 
-export function isValidTransition(from: WorkflowStage, to: WorkflowStage): boolean {
-  return getAllowedNextStages(from).includes(to);
+export function isValidTransition(from: WorkflowStage, to: WorkflowStage, route: WorkflowRoute = STANDARD_VISA_ROUTE): boolean {
+  return getAllowedNextStages(from, route).includes(to);
+}
+
+// True when reaching this stage means the service is finished
+export function isTerminalStage(stage: WorkflowStage, route: WorkflowRoute = STANDARD_VISA_ROUTE): boolean {
+  const step = route.steps.find((s) => s.stage === stage);
+  if (!step) return false;
+  if (step.branch === "MAIN") {
+    const main = branchSteps(route, "MAIN");
+    return !routeHasDecision(route) && main[main.length - 1] === stage;
+  }
+  const branch = branchSteps(route, step.branch);
+  return branch[branch.length - 1] === stage || TERMINAL_STAGES.includes(stage);
+}
+
+// The steps to show a client on their roadmap: the main steps, then the outcome branch they
+// are on. Before a decision the approved branch is shown as the expected path.
+export function roadmapPath(route: WorkflowRoute, currentStage: string): { steps: RouteStep[]; awaitingDecision: boolean } {
+  const main = route.steps.filter((s) => s.branch === "MAIN");
+  const current = route.steps.find((s) => s.stage === currentStage);
+  if (current?.branch === "REFUSED") {
+    return { steps: [...main, ...route.steps.filter((s) => s.branch === "REFUSED")], awaitingDecision: false };
+  }
+  const approved = route.steps.filter((s) => s.branch === "APPROVED");
+  const refused = route.steps.filter((s) => s.branch === "REFUSED");
+  const awaitingDecision = routeHasDecision(route) && current?.branch !== "APPROVED";
+  // A single-step outcome ("Visa Granted" / "Visa Denied") shows as one pending step until decided
+  if (awaitingDecision && approved.length === 1 && refused.length === 1) {
+    return { steps: [...main, { ...approved[0], label: combinedOutcomeLabel(route) }], awaitingDecision };
+  }
+  return { steps: [...main, ...approved], awaitingDecision };
+}
+
+// Button text for recording a decision: the outcome step's name ("Visa Granted") when the outcome
+// is a single step, otherwise a generic Approve / Refuse (e.g. the standard visa route)
+export function decisionActionLabel(route: WorkflowRoute, outcome: "APPROVED" | "REFUSED"): string {
+  if (branchSteps(route, "APPROVED").length === 1 && branchSteps(route, "REFUSED").length === 1) {
+    return stageLabel(branchSteps(route, outcome)[0], route);
+  }
+  return outcome === "APPROVED" ? "Approve" : "Refuse";
+}
+
+// "Visa Granted" + "Visa Denied" → "Visa Granted or Denied"
+export function combinedOutcomeLabel(route: WorkflowRoute): string {
+  const approved = branchSteps(route, "APPROVED")[0];
+  const refused = branchSteps(route, "REFUSED")[0];
+  const a = approved ? stageLabel(approved, route).split(" ") : [];
+  const r = refused ? stageLabel(refused, route).split(" ") : [];
+  let shared = 0;
+  while (shared < a.length - 1 && shared < r.length - 1 && a[shared].toLowerCase() === r[shared].toLowerCase()) shared++;
+  return [...a.slice(0, shared), a.slice(shared).join(" "), "or", r.slice(shared).join(" ")].filter(Boolean).join(" ");
 }
 
 export type DecisionOutcome = "APPROVED" | "REFUSED" | "WITHDRAWN" | "PENDING_ACTION";
 
-export function stageForDecision(decisionStatus: DecisionOutcome): WorkflowStage | null {
-  if (decisionStatus === "APPROVED") return "FLIGHT_BOOKING";
-  if (decisionStatus === "REFUSED") return "VISA_REFUSED_PATH";
+export function stageForDecision(decisionStatus: DecisionOutcome, route: WorkflowRoute = STANDARD_VISA_ROUTE): WorkflowStage | null {
+  if (decisionStatus === "APPROVED") return branchSteps(route, "APPROVED")[0] ?? null;
+  if (decisionStatus === "REFUSED") return branchSteps(route, "REFUSED")[0] ?? null;
   return null;
 }
 
@@ -142,4 +334,13 @@ export const SUBSTAGE_TASK_TEMPLATES: SubstageTaskTemplate[] = [
 
 export function getTaskTemplatesForStage(stage: WorkflowStage): SubstageTaskTemplate[] {
   return SUBSTAGE_TASK_TEMPLATES.filter((t) => t.stage === stage);
+}
+
+// History of the route the application is on now: everything from the most recent entry that
+// started a route (no fromStage) — creation, a new service stage, or a move off the old route.
+export function currentRouteHistory<T extends { fromStage: string | null }>(history: T[]): T[] {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].fromStage === null) return history.slice(i);
+  }
+  return history;
 }
