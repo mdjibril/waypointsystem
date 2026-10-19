@@ -57,32 +57,20 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { STAGE_ORDER, STAGE_LABELS, getAllowedNextStages } from "@/lib/workflow";
+import { STAGE_ORDER, ALL_STAGES, STAGE_LABELS, getAllowedNextStages, stageForDecision, stageLabel, routeStages, decisionActionLabel, currentRouteHistory } from "@/lib/workflow";
+import { routeForApplication } from "@/lib/serviceWorkflows";
+import { ClientServicesPanel, RoutePreview } from "@/components/ClientServicesPanel";
+import { ServiceRoadmap } from "@/components/ServiceRoadmap";
+import { ServiceWorkflowEditor } from "@/components/ServiceWorkflowEditor";
 import { CURRENCY_PRESETS, formatAmount } from "@/lib/currency";
 import { amountToWords } from "@/lib/numberToWords";
 import { downloadReceiptPdf } from "@/lib/receiptPdf";
-
-const SERVICE_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: "UK Tourist Visa", label: "UK Tourist Visa" },
-  { value: "Canada Study Permit", label: "Canada Study Permit" },
-  { value: "Schengen Tourist Visa", label: "Schengen Tourist Visa" },
-  { value: "Schengen Study Visa", label: "Schengen Study Visa" },
-  { value: "Schengen Other Visa", label: "Schengen Other Visa" },
-  { value: "USA B1/B2 Visa", label: "USA B1/B2 Visa" },
-  { value: "Australia Visitor Visa", label: "Australia Visitor Visa" },
-  { value: "UK Student Visa", label: "UK Student Visa" },
-  { value: "Canada Visit Visa", label: "Canada Visit Visa" },
-  { value: "Canada Tourist Visa", label: "Canada Tourist Visa" },
-  { value: "UK Visit Visa", label: "UK Visit Visa" },
-  { value: "Canada Express Entry Visa", label: "Canada Express Entry Visa" },
-  { value: "Document Legalisation/Authentication", label: "Document Legalisation/Authentication" },
-];
 
 const RECEIPT_SERVICE_OPTIONS = [
   "Consultation",
   "Visa Consultancy",
   "Visa Services",
-  "Travel Services",
+  "Corporate Travel",
   "International Relocation",
   "Medical Tourism",
   "Childbirth Abroad",
@@ -267,7 +255,9 @@ export default function Home() {
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [isAddAppOpen, setIsAddAppOpen] = useState(false);
   const [newAppClientId, setNewAppClientId] = useState("");
-  const [newAppServiceType, setNewAppServiceType] = useState("UK Tourist Visa");
+  const [newAppServiceType, setNewAppServiceType] = useState(""); // service type id
+  const [serviceTypes, setServiceTypes] = useState<any[]>([]);
+  const [pipelineServiceFilter, setPipelineServiceFilter] = useState("all");
   const [newAppDestination, setNewAppDestination] = useState("");
   const [newAppPurpose, setNewAppPurpose] = useState("");
   const [newAppTravelDate, setNewAppTravelDate] = useState("");
@@ -506,6 +496,35 @@ export default function Home() {
       viewClientProfile(Number(match[1]));
     }
   };
+
+  // Services (with their routes) offered when adding a service to a client
+  const fetchServiceTypes = async () => {
+    try {
+      const res = await fetch("/api/service-types");
+      const data = await res.json();
+      if (res.ok) setServiceTypes(data.serviceTypes);
+    } catch (err) {
+      console.error("Failed to load service types:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (user) fetchServiceTypes();
+  }, [user]);
+
+  const serviceTypeOptions = serviceTypes.map((s: any) => ({ value: String(s.id), label: s.name }));
+  const serviceNameOptions = serviceTypes.map((s: any) => ({ value: s.name, label: s.name }));
+
+  // Pipeline columns: the selected service's route, or every stage in use when showing all services
+  const pipelineApps = pipelineServiceFilter === "all"
+    ? applications
+    : applications.filter((a: any) => a.serviceType === pipelineServiceFilter);
+  const pipelineFilterService = serviceTypes.find((s: any) => s.name === pipelineServiceFilter);
+  const pipelineStageSet = new Set<string>([
+    ...(pipelineFilterService ? routeStages(pipelineFilterService.route) : pipelineServiceFilter === "all" ? STAGE_ORDER : []),
+    ...pipelineApps.map((a: any) => a.currentStage),
+  ]);
+  const pipelineColumns = ALL_STAGES.filter((stage) => pipelineStageSet.has(stage));
 
   // Load applications when Applications tab is selected
   const fetchApplications = async () => {
@@ -1016,8 +1035,13 @@ export default function Home() {
     const toStage = String(over.id);
     if (!app || app.currentStage === toStage) return;
 
-    if (!(getAllowedNextStages(app.currentStage) as string[]).includes(toStage)) {
-      setPipelineError(`Cannot move from ${STAGE_LABELS[app.currentStage as keyof typeof STAGE_LABELS]} to ${STAGE_LABELS[toStage as keyof typeof STAGE_LABELS]}`);
+    const appRoute = routeForApplication(app);
+    if (!(getAllowedNextStages(app.currentStage, appRoute) as string[]).includes(toStage)) {
+      setPipelineError(
+        (routeStages(appRoute) as string[]).includes(toStage)
+          ? `Cannot move from ${stageLabel(app.currentStage, appRoute)} to ${stageLabel(toStage, appRoute)}`
+          : `${stageLabel(toStage)} is not part of the ${app.serviceType} route`
+      );
       return;
     }
 
@@ -1046,7 +1070,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId: Number(newAppClientId),
-          serviceType: newAppServiceType,
+          serviceTypeId: Number(newAppServiceType),
           destinationCountry: newAppDestination,
           travelPurpose: newAppPurpose,
           expectedTravelDate: newAppTravelDate || undefined,
@@ -1061,7 +1085,7 @@ export default function Home() {
       } else {
         setAddAppSuccess("Application created successfully!");
         setNewAppClientId("");
-        setNewAppServiceType("UK Tourist Visa");
+        setNewAppServiceType("");
         setNewAppDestination("");
         setNewAppPurpose("");
         setNewAppTravelDate("");
@@ -2845,6 +2869,16 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Services & Roadmap */}
+              <ClientServicesPanel
+                clientId={selectedClient.id}
+                canAddService={user?.role === "ADMIN"}
+                staffUsers={staffUsers}
+                defaultStaffId={selectedClient.assignedStaffId}
+                onOpenApplication={(applicationId) => { setCurrentTab("applications"); viewApplication(applicationId); }}
+                onServiceAdded={() => { fetchApplications(); fetchActivityLog(selectedClient.id); }}
+              />
+
               {/* Activity Timeline */}
               <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
                 <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
@@ -3033,8 +3067,15 @@ export default function Home() {
                         <Dropdown
                           value={newAppServiceType}
                           onChange={setNewAppServiceType}
-                          options={SERVICE_TYPE_OPTIONS}
+                          options={serviceTypeOptions}
+                          placeholder="Select a service..."
                         />
+                        {serviceTypes.find((st: any) => String(st.id) === newAppServiceType) && (
+                          <div className="mt-2 p-3 bg-muted/20 border border-border rounded-xl">
+                            <p className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5">This client will follow this route</p>
+                            <RoutePreview route={serviceTypes.find((st: any) => String(st.id) === newAppServiceType).route} />
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
@@ -3227,7 +3268,7 @@ export default function Home() {
                       {selectedApplication.client?.firstName} {selectedApplication.client?.lastName}
                     </h3>
                     <p className="text-sm font-mono text-primary font-bold mt-0.5">{selectedApplication.client?.fileNumber}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{selectedApplication.serviceType} · {selectedApplication.destinationCountry}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Stage {selectedApplication.phase ?? 1}: {selectedApplication.serviceType} · {selectedApplication.destinationCountry}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
@@ -3266,6 +3307,25 @@ export default function Home() {
                   {stageActionError}
                 </div>
               )}
+
+              {/* Service Roadmap */}
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                <h4 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
+                  <Workflow className="h-4 w-4 text-primary" /> {selectedApplication.serviceType} Roadmap
+                </h4>
+                {!selectedApplication.workflowRoute && (
+                  <p className="text-[11px] text-amber-700 bg-amber-500/10 rounded-lg px-3 py-2 mb-4">
+                    This application is on the old 15-stage route.{user?.role === "ADMIN" ? " To put it on one of the services, use \"Move to a service\" in the Services & Progress card on the client's profile." : ""}
+                  </p>
+                )}
+                <ServiceRoadmap
+                  route={routeForApplication(selectedApplication)}
+                  currentStage={selectedApplication.currentStage}
+                  status={selectedApplication.status}
+                  decisionStatus={selectedApplication.decisionStatus}
+                  history={currentRouteHistory(stageHistory.filter((h: any) => (h.phase ?? 1) === (selectedApplication.phase ?? 1)))}
+                />
+              </div>
 
               {/* Application Details Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
@@ -3313,17 +3373,17 @@ export default function Home() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button
                         disabled={stageActionLoading}
-                        onClick={() => moveApplicationStage(selectedApplication.id, "FLIGHT_BOOKING", "APPROVED")}
+                        onClick={() => moveApplicationStage(selectedApplication.id, stageForDecision("APPROVED", routeForApplication(selectedApplication)) || "FLIGHT_BOOKING", "APPROVED")}
                         className="bg-green-500/10 text-green-600 text-xs font-bold px-3 py-2.5 rounded-xl hover:bg-green-500/20 transition-all cursor-pointer disabled:opacity-50"
                       >
-                        Approve
+                        {decisionActionLabel(routeForApplication(selectedApplication), "APPROVED")}
                       </button>
                       <button
                         disabled={stageActionLoading}
-                        onClick={() => moveApplicationStage(selectedApplication.id, "VISA_REFUSED_PATH", "REFUSED")}
+                        onClick={() => moveApplicationStage(selectedApplication.id, stageForDecision("REFUSED", routeForApplication(selectedApplication)) || "VISA_REFUSED_PATH", "REFUSED")}
                         className="bg-red-500/10 text-red-600 text-xs font-bold px-3 py-2.5 rounded-xl hover:bg-red-500/20 transition-all cursor-pointer disabled:opacity-50"
                       >
-                        Refuse
+                        {decisionActionLabel(routeForApplication(selectedApplication), "REFUSED")}
                       </button>
                       <button
                         disabled={stageActionLoading}
@@ -3342,14 +3402,14 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-2">
-                      {getAllowedNextStages(selectedApplication.currentStage).map((stage) => (
+                      {getAllowedNextStages(selectedApplication.currentStage, routeForApplication(selectedApplication)).map((stage) => (
                         <button
                           key={stage}
                           disabled={stageActionLoading}
                           onClick={() => moveApplicationStage(selectedApplication.id, stage)}
                           className="bg-primary text-primary-foreground text-xs font-bold px-3 py-2.5 rounded-xl shadow-md shadow-primary/10 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
                         >
-                          Move to {STAGE_LABELS[stage as keyof typeof STAGE_LABELS]}
+                          Move to {stageLabel(stage, routeForApplication(selectedApplication))}
                         </button>
                       ))}
                     </div>
@@ -3863,7 +3923,15 @@ export default function Home() {
             <div className="space-y-6 animate-in fade-in duration-200">
               <div>
                 <h3 className="text-lg font-bold text-foreground">Pipeline Board</h3>
-                <p className="text-xs text-muted-foreground">Drag a card into a column to move it to that stage, or click a card to open its detail page.</p>
+                <p className="text-xs text-muted-foreground">Drag a card into a column to move it to that stage, or click a card to open its detail page. Cards can only move along their own service's route.</p>
+              </div>
+
+              <div className="max-w-xs">
+                <Dropdown
+                  value={pipelineServiceFilter}
+                  onChange={setPipelineServiceFilter}
+                  options={[{ value: "all", label: "All services" }, ...serviceNameOptions]}
+                />
               </div>
 
               {pipelineError && (
@@ -3880,9 +3948,9 @@ export default function Home() {
               ) : (
                 <DndContext sensors={pipelineSensors} onDragStart={handlePipelineDragStart} onDragEnd={handlePipelineDragEnd}>
                   <div className="flex gap-4 overflow-x-auto pb-4">
-                    {STAGE_ORDER.map((stage) => {
-                      const stageApps = applications.filter((a: any) => a.currentStage === stage);
-                      const allowedForActive = activeDragApp ? getAllowedNextStages(activeDragApp.currentStage) : [];
+                    {pipelineColumns.map((stage) => {
+                      const stageApps = pipelineApps.filter((a: any) => a.currentStage === stage);
+                      const allowedForActive = activeDragApp ? getAllowedNextStages(activeDragApp.currentStage, routeForApplication(activeDragApp)) : [];
                       const dropState: "neutral" | "valid" | "invalid" = !activeDragApp
                         ? "neutral"
                         : allowedForActive.includes(stage)
@@ -4071,7 +4139,7 @@ export default function Home() {
                             className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
                           >
                             <option value="">None</option>
-                            {STAGE_ORDER.map((stage) => (
+                            {ALL_STAGES.map((stage) => (
                               <option key={stage} value={stage}>
                                 {STAGE_LABELS[stage]}
                               </option>
@@ -4446,7 +4514,7 @@ export default function Home() {
                         <Dropdown
                           value={newTemplateServiceType}
                           onChange={setNewTemplateServiceType}
-                          options={[{ value: "", label: "All Service Types" }, ...SERVICE_TYPE_OPTIONS]}
+                          options={[{ value: "", label: "All Service Types" }, ...serviceNameOptions]}
                         />
                       </div>
                       <div className="space-y-1">
@@ -5588,6 +5656,8 @@ export default function Home() {
                 <h3 className="text-lg font-bold text-foreground">Account & Platform Settings</h3>
                 <p className="text-xs text-muted-foreground">Manage your credentials, update your personal profile, and toggle workspace alerts.</p>
               </div>
+
+              {user?.role === "ADMIN" && <ServiceWorkflowEditor />}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* 1. Edit Profile Form */}

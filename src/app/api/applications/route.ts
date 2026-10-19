@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 import { logActivity } from "@/lib/activityLog";
 import { canManageApplications, isAdmin } from "@/lib/permissions";
+import { routeFromService } from "@/lib/serviceTypes";
+import { defaultRouteForService, routeForApplication } from "@/lib/serviceWorkflows";
+import { firstStage, routeStages } from "@/lib/workflow";
 
 // GET /api/applications - List applications (ADMIN: all, non-ADMIN: assigned clients only)
 export async function GET() {
@@ -40,7 +43,8 @@ export async function GET() {
   }
 }
 
-// POST /api/applications - Create a new application (admin only)
+// POST /api/applications - Add a service to a client (admin only). The application is put on
+// that service's route, which is stored with it so later route edits don't affect it.
 export async function POST(request: Request) {
   try {
     const currentUser = await getCurrentUserFromCookies();
@@ -61,14 +65,15 @@ export async function POST(request: Request) {
 
     const {
       clientId,
-      serviceType,
+      serviceTypeId,
+      serviceType: serviceTypeName,
       destinationCountry,
       travelPurpose,
       expectedTravelDate,
       assignedStaffId,
     } = await request.json();
 
-    if (!clientId || !serviceType || !destinationCountry || !travelPurpose) {
+    if (!clientId || (!serviceTypeId && !serviceTypeName) || !destinationCountry || !travelPurpose) {
       return NextResponse.json(
         { error: "Client ID, service type, destination country, and travel purpose are required" },
         { status: 400 }
@@ -84,10 +89,29 @@ export async function POST(request: Request) {
       );
     }
 
+    const service = await prisma.serviceType.findFirst({
+      where: serviceTypeId ? { id: Number(serviceTypeId) } : { name: serviceTypeName },
+      include: { workflowSteps: { orderBy: { order: "asc" } } },
+    });
+
+    if (serviceTypeId && !service) {
+      return NextResponse.json({ error: "Service not found" }, { status: 404 });
+    }
+    if (service && !service.isActive) {
+      return NextResponse.json({ error: "This service is no longer offered" }, { status: 400 });
+    }
+
+    const serviceType: string = service?.name ?? serviceTypeName;
+    const route = service ? routeFromService(service) : defaultRouteForService(serviceType);
+    const startStage = firstStage(route);
+
     const newApplication = await prisma.application.create({
       data: {
         clientId: Number(clientId),
         serviceType,
+        serviceTypeId: service?.id ?? null,
+        workflowRoute: route as any,
+        currentStage: startStage,
         destinationCountry,
         travelPurpose,
         expectedTravelDate: expectedTravelDate ? new Date(expectedTravelDate) : null,
@@ -113,7 +137,7 @@ export async function POST(request: Request) {
       data: {
         applicationId: newApplication.id,
         fromStage: null,
-        toStage: "CLIENT_INQUIRY",
+        toStage: startStage,
         changedById: currentUser.id,
       },
     });
@@ -194,8 +218,22 @@ export async function PATCH(request: Request) {
       );
     }
 
+    // The route is fixed by the service chosen at creation; switching service means adding a new one
+    if (serviceType !== undefined && serviceType !== existingApplication.serviceType) {
+      return NextResponse.json(
+        { error: "The service of an application cannot be changed. Add a new service to the client instead." },
+        { status: 400 }
+      );
+    }
+
+    if (currentStage !== undefined && !(routeStages(routeForApplication(existingApplication)) as string[]).includes(currentStage)) {
+      return NextResponse.json(
+        { error: `${currentStage} is not a step on this application's route` },
+        { status: 400 }
+      );
+    }
+
     const updateData: any = {};
-    if (serviceType !== undefined) updateData.serviceType = serviceType;
     if (destinationCountry !== undefined) updateData.destinationCountry = destinationCountry;
     if (travelPurpose !== undefined) updateData.travelPurpose = travelPurpose;
     if (expectedTravelDate !== undefined) updateData.expectedTravelDate = expectedTravelDate ? new Date(expectedTravelDate) : null;

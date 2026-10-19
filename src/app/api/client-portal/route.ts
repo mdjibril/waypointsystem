@@ -1,5 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { routeForApplication } from "@/lib/serviceWorkflows";
+import { currentRouteHistory } from "@/lib/workflow";
+
+// When each step was first reached, so later back-and-forth moves don't change the dates clients see
+function firstReachedDates(history: { toStage: string; createdAt: Date }[]): Record<string, Date> {
+  const dates: Record<string, Date> = {};
+  for (const h of history) {
+    if (!dates[h.toStage]) dates[h.toStage] = h.createdAt;
+  }
+  return dates;
+}
 
 export async function GET(request: Request) {
   try {
@@ -29,18 +40,19 @@ export async function GET(request: Request) {
           select: {
             id: true,
             serviceType: true,
+            workflowRoute: true,
             destinationCountry: true,
             currentStage: true,
             status: true,
             decisionStatus: true,
             createdAt: true,
+            phase: true,
             stageHistory: {
               orderBy: { createdAt: "asc" },
               select: {
-                id: true,
                 toStage: true,
                 fromStage: true,
-                note: true,
+                phase: true,
                 createdAt: true,
               },
             },
@@ -53,7 +65,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "No client found matching that file number or email." }, { status: 404 });
     }
 
-    return NextResponse.json({ client });
+    // Clients only see the route they are currently on: earlier service stages and the
+    // back-and-forth of staff moves stay internal (and staff notes are never sent)
+    return NextResponse.json({
+      client: {
+        ...client,
+        applications: client.applications.map(({ stageHistory, ...app }) => ({
+          ...app,
+          workflowRoute: routeForApplication(app),
+          stageReachedAt: firstReachedDates(currentRouteHistory(stageHistory.filter((h) => h.phase === app.phase))),
+        })),
+      },
+    });
   } catch (error: any) {
     console.error("Client portal lookup error:", error);
     return NextResponse.json({ error: "Failed to look up client" }, { status: 500 });

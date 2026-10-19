@@ -4,12 +4,8 @@ import React, { useState } from "react";
 import {
   Search,
   ArrowRight,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  FileText,
-  ChevronDown,
 } from "lucide-react";
+import { ClientJourneyCard, ClientJourneyApplication } from "@/components/ClientJourneyCard";
 
 interface ClientInfo {
   id: number;
@@ -18,48 +14,14 @@ interface ClientInfo {
   lastName: string;
   email: string;
   phone: string;
-  applications: {
-    id: number;
-    serviceType: string;
-    destinationCountry: string;
-    currentStage: string;
-    status: string;
-    decisionStatus: string | null;
-    createdAt: string;
-    stageHistory: {
-      id: number;
-      toStage: string;
-      fromStage: string | null;
-      note: string | null;
-      createdAt: string;
-    }[];
-  }[];
+  applications: ClientJourneyApplication[];
 }
-
-const STAGE_LABELS: Record<string, string> = {
-  CLIENT_INQUIRY: "Client Inquiry",
-  CUSTOMER_SERVICE_REGISTRATION: "Registration",
-  INITIAL_CONSULTATION: "Initial Consultation",
-  PAYMENT_SERVICE_AGREEMENT: "Payment & Agreement",
-  DOCUMENT_COLLECTION_VERIFICATION: "Document Collection",
-  VISA_PROCESSING: "Application Initiated",
-  QUALITY_REVIEW: "Application Review",
-  APPLICATION_SUBMISSION: "Application Submitted",
-  APPLICATION_TRACKING: "Application Tracking",
-  DECISION: "Decision - Waiting",
-  FLIGHT_BOOKING: "Flight Booking",
-  PRE_DEPARTURE_BRIEFING: "Pre-Departure Briefing",
-  CLIENT_TRAVELS: "Client Travels",
-  FOLLOW_UP: "Follow-up & Testimonials",
-  VISA_REFUSED_PATH: "Visa Refused",
-};
 
 export default function ClientPortal() {
   const [searchQuery, setSearchQuery] = useState("");
   const [client, setClient] = useState<ClientInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedApp, setExpandedApp] = useState<number | null>(null);
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,86 +90,7 @@ export default function ClientPortal() {
 
           {/* Application Cards */}
           {client.applications.map((app) => (
-            <div key={app.id} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-              <div className="flex items-start justify-between flex-wrap gap-4">
-                <div>
-                  <h3 className="font-bold text-foreground">{app.serviceType}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">{app.destinationCountry}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1.5">
-                  <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary/10 text-primary">
-                    {STAGE_LABELS[app.currentStage] || app.currentStage}
-                  </span>
-                  {app.decisionStatus && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      app.decisionStatus === "APPROVED" ? "bg-green-500/10 text-green-600" :
-                      app.decisionStatus === "REFUSED" ? "bg-red-500/10 text-red-600" :
-                      "bg-yellow-500/10 text-yellow-600"
-                    }`}>
-                      {app.decisionStatus}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="mt-4">
-                <div className="flex justify-between text-[10px] font-bold text-muted-foreground mb-1.5">
-                  <span>Application Progress</span>
-                  <span>
-                    {app.status === "COMPLETED" ? "Completed" : "In Progress"}
-                  </span>
-                </div>
-                <div className="h-2.5 w-full bg-muted/30 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-700 ${
-                      app.status === "COMPLETED" ? "bg-green-500" :
-                      app.currentStage === "DECISION" ? "bg-primary" :
-                      app.currentStage === "FLIGHT_BOOKING" || app.currentStage === "PRE_DEPARTURE_BRIEFING" ||
-                      app.currentStage === "CLIENT_TRAVELS" || app.currentStage === "FOLLOW_UP"
-                        ? "bg-green-500/80" :
-                      app.currentStage === "VISA_REFUSED_PATH" ? "bg-red-500/80" :
-                      "bg-primary/70"
-                    }`}
-                    style={{
-                      width: app.status === "COMPLETED" ? "100%" :
-                        app.currentStage === "CLIENT_INQUIRY" ? "7%" :
-                        app.currentStage === "FOLLOW_UP" ? "100%" :
-                        app.currentStage === "VISA_REFUSED_PATH" ? "85%" :
-                        app.currentStage === "DECISION" ? "70%" : "50%"
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Stage History Toggle */}
-              <div className="mt-4">
-                <button
-                  onClick={() => setExpandedApp(expandedApp === app.id ? null : app.id)}
-                  className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline cursor-pointer"
-                >
-                  {expandedApp === app.id ? "Hide" : "View"} Stage History
-                  <ChevronDown className={`h-3 w-3 transition-transform ${expandedApp === app.id ? "rotate-180" : ""}`} />
-                </button>
-                {expandedApp === app.id && (
-                  <div className="mt-3 space-y-2 border-l-2 border-border/60 pl-4 ml-1">
-                    {app.stageHistory.map((h) => (
-                      <div key={h.id} className="relative">
-                        <div className="absolute -left-[23px] top-1.5 h-2 w-2 rounded-full bg-primary" />
-                        <p className="text-xs font-semibold text-foreground">
-                          {h.fromStage
-                            ? `${STAGE_LABELS[h.fromStage] || h.fromStage} → ${STAGE_LABELS[h.toStage] || h.toStage}`
-                            : `Started: ${STAGE_LABELS[h.toStage] || h.toStage}`}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {new Date(h.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <ClientJourneyCard key={app.id} app={app} />
           ))}
 
           {/* Footer */}

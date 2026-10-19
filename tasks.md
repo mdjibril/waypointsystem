@@ -256,6 +256,82 @@ Merge order:
 5. `feature/manual-qa-admin-flow`
 6. `fix/final-qa-issues`
 
+## Phase 13: Service-Based Workflows
+
+Every service now has its own route. A client starts on a service's route when an application is created. When that route is finished, the next service is added to the same application as Stage 2, Stage 3, and so on.
+
+| Task | Owner | Branch | Depends On |
+| --- | --- | --- | --- |
+| [x] Per-service routes (`ServiceWorkflowStep`), stored on each application when it starts | Developer 1 | `feature/service-based-workflows` | Workflow rules |
+| [x] Six services: Visa Services, Consultation, International Relocation, Childbirth Abroad / Medical Tourism, Corporate Travel, Admission Assistance ("Travel Services" renamed to Corporate Travel) | Developer 1 | `feature/service-based-workflows` | Service routes |
+| [x] Granted / denied outcome recorded at the decision step | Developer 1 | `feature/service-based-workflows` | Service routes |
+| [x] Add the next service to a finished application as Stage 2, 3… (`ApplicationPhase`) | Developer 1 | `feature/service-based-workflows` | Service routes |
+| [x] Admin can move an application from the old 15-stage route onto a service, at the step the client has reached | Developer 1 | `feature/service-based-workflows` | Service routes |
+| [x] Sync script loads the six services and turns off the old/draft service types (`scripts/sync-service-workflows.ts`) | Developer 1 | `feature/service-based-workflows` | Service routes |
+| [x] Split the Stage 2 schema changes into their own migration (`20261020000000_add_application_service_stages`) after the first migration had already been applied | Developer 1 | `feature/service-based-workflows` | Service routes |
+| [x] Staff roadmap with completed stages on client profile and application detail | Developer 2 | `feature/service-based-workflows` | Service stages |
+| [x] "Add next service" always visible to admins, greyed out until the current route is finished | Developer 2 | `feature/service-based-workflows` | Service stages |
+| [x] Client portal journey card: current route only, no move history or staff notes | Developer 2 | `feature/service-based-workflows` | Service stages |
+| [x] Admin route editor in Settings → Service Workflows; pipeline filter by service | Developer 2 | `feature/service-based-workflows` | Service routes |
+| [x] Unit and integration tests for routes, stages, switching and portal (98 tests passing) | Both | `feature/service-based-workflows` | All of the above |
+
+Deployment steps (shared database):
+
+1. `npm run db:deploy`
+2. `npx tsx scripts/sync-service-workflows.ts`
+
+Test plan: `test.md` → Phase 13.
+
+## Phase 14: Progressive Web App (PWA)
+
+Make the system installable on phones and desktops: staff can open it like an app, and clients can add the portal to their home screen.
+
+| Task | Owner | Branch | Depends On |
+| --- | --- | --- | --- |
+| [ ] Add a web app manifest (name, short name, theme/background colours, `display: standalone`, start URL) | Developer 1 | `feature/pwa-manifest` | — |
+| [ ] Generate app icons from the company logo (192px, 512px, maskable, Apple touch icon) and add the meta tags to the root layout | Developer 2 | `feature/pwa-manifest` | Manifest |
+| [ ] Add a service worker that caches the app shell and static assets only. API responses and client data must never be cached, because they contain personal information | Developer 1 | `feature/pwa-service-worker` | Manifest |
+| [ ] Offline fallback page ("You're offline. Reconnect to continue.") instead of the browser error | Developer 2 | `feature/pwa-service-worker` | Service worker |
+| [ ] "Install app" prompt for staff (Android/desktop) and Add to Home Screen instructions for iOS | Developer 2 | `feature/pwa-install-prompt` | Service worker |
+| [ ] Separate install entry for the client portal (`/client`) so clients can save it to their home screen | Developer 2 | `feature/pwa-install-prompt` | Install prompt |
+| [ ] Update handling: when a new version is deployed, show "Update available, reload" instead of serving stale files | Developer 1 | `feature/pwa-service-worker` | Service worker |
+| [ ] Lighthouse PWA audit and install testing on Android Chrome, iOS Safari and desktop Chrome/Edge; write the test flow in `test.md` | Both | `feature/pwa-qa` | All PWA tasks |
+
+Merge order:
+
+1. `feature/pwa-manifest`
+2. `feature/pwa-service-worker`
+3. `feature/pwa-install-prompt`
+4. `feature/pwa-qa`
+
+## Phase 15: Inspection And Testing Of The Current System
+
+Inspect and test the whole system as it stands after Phases 1–14, fix what is found, and record the results.
+
+| Task | Owner | Branch | Depends On |
+| --- | --- | --- | --- |
+| [ ] Run the full manual walkthrough for each of the six services (new client → service route → outcome → Stage 2) as admin and as staff | Both | `fix/qa-service-workflows` | Phase 13 deployed |
+| [ ] Check that existing (pre-Phase 13) applications still work and can be moved onto a service | Developer 2 | `fix/qa-service-workflows` | Phase 13 deployed |
+| [ ] Client portal review on phone and desktop: only the current route is shown, no staff notes or move history are exposed | Developer 2 | `fix/qa-client-portal` | Phase 13 deployed |
+| [ ] Update dashboard charts and reports to count applications on the new service routes (they currently count only the old 15 stages) | Developer 1 | `fix/dashboard-service-stages` | Phase 13 |
+| [ ] Investigate `/api/notifications` being called every ~2 seconds and the database connection timeouts seen in the dev logs | Developer 1 | `fix/notifications-polling` | — |
+| [ ] Bring `prisma/migrations` back in line with the database: daily reports and `stageData` were added without migrations | Developer 1 | `fix/migration-drift` | — |
+| [ ] Decide on the unmerged `feature/client-portal-milestone-tracker` branch (its design now lives in Phase 13), then merge or close it | Both | — | Phase 13 merged |
+| [ ] Security review: role checks on every API route, client portal lookup exposure, file downloads | Developer 1 | `fix/security-review` | — |
+| [ ] Lint clean-up: `npm run lint` currently reports many errors across the codebase | Both | `fix/lint-cleanup` | — |
+| [ ] Run `npm test` and `npm run build`, test performance on a slow connection, and record every finding and fix in `test.md` | Both | `fix/final-qa-issues` | All of the above |
+
+Merge order:
+
+1. `fix/migration-drift`
+2. `fix/notifications-polling`
+3. `fix/dashboard-service-stages`
+4. `fix/qa-service-workflows`
+5. `fix/qa-client-portal`
+6. `fix/security-review`
+7. `fix/lint-cleanup`
+8. `fix/final-qa-issues`
+
 ## Suggested First Sprint
 
 The first sprint should produce a usable foundation that both developers can build on.

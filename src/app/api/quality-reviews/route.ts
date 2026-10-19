@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { routeForApplication } from "@/lib/serviceWorkflows";
+import { routeStages } from "@/lib/workflow";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 import { canDecideQualityReview } from "@/lib/permissions";
 
@@ -131,12 +133,29 @@ export async function PATCH(request: Request) {
       },
     });
 
-    // If approved, mark application as ready for submission
+    // If approved, mark application as ready for submission — only for services whose route has
+    // a review step, and with a stage history entry like any other stage move
     if (decision === "APPROVED") {
-      await prisma.application.update({
-        where: { id: review.applicationId },
-        data: { currentStage: "QUALITY_REVIEW" },
-      });
+      const application = await prisma.application.findUnique({ where: { id: review.applicationId } });
+      const route = application ? routeForApplication(application) : null;
+      if (application && route && routeStages(route).includes("QUALITY_REVIEW") && application.currentStage !== "QUALITY_REVIEW") {
+        await prisma.$transaction([
+          prisma.application.update({
+            where: { id: application.id },
+            data: { currentStage: "QUALITY_REVIEW", status: "IN_PROGRESS" },
+          }),
+          prisma.applicationStageHistory.create({
+            data: {
+              applicationId: application.id,
+              fromStage: application.currentStage,
+              toStage: "QUALITY_REVIEW",
+              phase: application.phase,
+              changedById: currentUser.id,
+              note: "Quality review approved",
+            },
+          }),
+        ]);
+      }
     }
 
     return NextResponse.json({ review });
