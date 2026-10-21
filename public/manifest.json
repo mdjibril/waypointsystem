@@ -1,0 +1,30 @@
+{
+  "name": "Way Point Travel - Workflow System",
+  "short_name": "Way Point",
+  "description": "Internal workflow and client management platform for Way Point Travel Limited.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#052754",
+  "theme_color": "#052754",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

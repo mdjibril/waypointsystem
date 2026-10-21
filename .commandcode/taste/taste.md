@@ -29,3 +29,6 @@
 # document-templates
 - Support global document templates that apply to ALL service types (e.g., "Valid Passport") so they don't need to be duplicated across individual service types. Confidence: 0.75
 
+# auth
+- User roles are stored lowercase in the DB ("admin", "staff") but permission helpers like isAdmin() check against uppercase ("ADMIN"); normalize the role to uppercase in getCurrentUserFromCookies() after the DB fetch so server-side API auth checks work consistently with the client-side AuthContext. Confidence: 0.70
+
