@@ -16,9 +16,11 @@
 - In test.md, include a manual step-by-step walkthrough from inquiry to decision (register client, create application, move through all pipeline stages) that a tester can follow hands-on, even when seeded data verification steps also exist. Confidence: 0.70
 
 # database
+- When writing raw SQL (psql) against Prisma-generated tables, wrap camelCase column names in double quotes (e.g., "clientId", "fileNumber", "assignedStaffId") — PostgreSQL lowercases unquoted identifiers and Prisma maps fields with camelCase columns. Confidence: 0.75
 - Use a shared pg.Pool (max 5) with the PrismaPg adapter instead of passing a raw connection string, to avoid exhausting Supabase's 15-connection session pool limit. Confidence: 0.70
 - When connecting to the Supabase transaction pooler (port 6543), set ssl: { rejectUnauthorized: false } in the pg.Pool config — the pooler uses self-signed certs and sslmode=no-verify in the connection string doesn't reliably pass through to pg.Pool. Confidence: 0.70
 - For Prisma migrations and DDL operations, use the Supabase session pooler (port 5432) with sslmode=require — the transaction pooler (port 6543) breaks DDL and sslmode=no-verify causes connection hangs. Confidence: 0.70
+- The Supabase free-tier project pauses when idle: the pooler stays reachable via TCP but the database is asleep, so the first connection attempt times out and triggers a ~30s wake-up. Retry after a short wait instead of assuming a config error. Confidence: 0.70
 
 # debugging
 - When making multiple code changes, verify incrementally with typecheck/build after each change instead of batch-applying many edits at once, to avoid cascading errors that are hard to trace. Confidence: 0.70
@@ -26,4 +28,7 @@
 
 # document-templates
 - Support global document templates that apply to ALL service types (e.g., "Valid Passport") so they don't need to be duplicated across individual service types. Confidence: 0.75
+
+# auth
+- User roles are stored lowercase in the DB ("admin", "staff") but permission helpers like isAdmin() check against uppercase ("ADMIN"); normalize the role to uppercase in getCurrentUserFromCookies() after the DB fetch so server-side API auth checks work consistently with the client-side AuthContext. Confidence: 0.70
 

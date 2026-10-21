@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
-import { isValidTransition, stageForDecision, DecisionOutcome, TERMINAL_STAGES, STAGE_LABELS } from "@/lib/workflow";
+import { isValidTransition, stageForDecision, DecisionOutcome, isTerminalStage, firstStage, stageLabel } from "@/lib/workflow";
+import { routeForApplication } from "@/lib/serviceWorkflows";
 import { WorkflowStage } from "@/types";
 import { logActivity } from "@/lib/activityLog";
 import { createNotification } from "@/lib/notifications";
@@ -97,6 +98,7 @@ export async function POST(
     }
 
     const fromStage = application.currentStage as WorkflowStage;
+    const route = routeForApplication(application);
 
     if (!canTransitionApplication(currentUser.role, application.client.assignedStaffId, currentUser.id, fromStage, toStage as WorkflowStage)) {
       return NextResponse.json(
@@ -114,15 +116,15 @@ export async function POST(
     // Notes-only update (no stage change) — just record a note on the current stage
     const isNoteOnlyUpdate = fromStage === toStage && !!note && !decisionStatus;
 
-    if (!isSameStageDecisionUpdate && !isNoteOnlyUpdate && !isValidTransition(fromStage, toStage as WorkflowStage)) {
+    if (!isSameStageDecisionUpdate && !isNoteOnlyUpdate && !isValidTransition(fromStage, toStage as WorkflowStage, route)) {
       return NextResponse.json(
-        { error: `Cannot move from ${fromStage} to ${toStage}` },
+        { error: `Cannot move from ${stageLabel(fromStage, route)} to ${stageLabel(toStage, route)} on the ${application.serviceType} route` },
         { status: 400 }
       );
     }
 
     if (decisionStatus && (decisionStatus === "APPROVED" || decisionStatus === "REFUSED")) {
-      const expectedStage = stageForDecision(decisionStatus as DecisionOutcome);
+      const expectedStage = stageForDecision(decisionStatus as DecisionOutcome, route);
       if (expectedStage !== toStage) {
         return NextResponse.json(
           { error: `Decision "${decisionStatus}" must move the application to ${expectedStage}` },
@@ -138,6 +140,7 @@ export async function POST(
           applicationId: Number(id),
           fromStage,
           toStage,
+          phase: application.phase,
           changedById: currentUser.id,
           note,
         },
@@ -147,9 +150,9 @@ export async function POST(
       return NextResponse.json({ historyEntry }, { status: 201 });
     }
 
-    const newStatus = TERMINAL_STAGES.includes(toStage as WorkflowStage)
+    const newStatus = isTerminalStage(toStage as WorkflowStage, route)
       ? "COMPLETED"
-      : toStage === "CLIENT_INQUIRY"
+      : toStage === firstStage(route)
         ? "NOT_STARTED"
         : "IN_PROGRESS";
 
@@ -171,6 +174,7 @@ export async function POST(
           applicationId: Number(id),
           fromStage,
           toStage,
+          phase: application.phase,
           changedById: currentUser.id,
           note: note || null,
         },
@@ -183,7 +187,7 @@ export async function POST(
       entityType: "APPLICATION",
       entityId: updatedApplication.id,
       action: "STAGE_CHANGED",
-      description: `${fromStage ? `${STAGE_LABELS[fromStage] || fromStage} → ` : ""}${STAGE_LABELS[toStage as WorkflowStage] || toStage}${note ? ` — ${note}` : ""}`,
+      description: `${fromStage ? `${stageLabel(fromStage, route)} → ` : ""}${stageLabel(toStage, route)}${note ? ` — ${note}` : ""}`,
       actorId: currentUser.id,
     });
 
@@ -193,7 +197,7 @@ export async function POST(
         userId: notifyStaffId,
         type: "STAGE_CHANGED",
         title: "Application stage changed",
-        message: `${updatedApplication.client.firstName} ${updatedApplication.client.lastName}'s application moved to ${STAGE_LABELS[toStage as WorkflowStage] || toStage}.`,
+        message: `${updatedApplication.client.firstName} ${updatedApplication.client.lastName}'s application moved to ${stageLabel(toStage, route)}.`,
         link: `clients:${updatedApplication.clientId}`,
       });
     }

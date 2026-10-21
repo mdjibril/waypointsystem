@@ -2091,3 +2091,135 @@ npm test
 npm run build
 ```
 **Expected:** Compiles successfully with no errors.
+
+---
+
+# Phase 13 — Test Plan: Service-Based Workflows
+
+## Context
+
+The company offers six services, and each one has its own route. Starting an application means choosing a service, which puts the client on that service's route. When the route is finished, the next service can be added to the same application as **Stage 2**, **Stage 3**, and so on. The client portal shows only the route the client is on now. It never shows the history of moves.
+
+| Service | Route |
+| --- | --- |
+| Visa Services | Visa Application Initiated → Processed → Submitted → Awaiting Embassy Decision → Visa Granted / Visa Denied |
+| Consultation | Document Accepted → Document Reviewed → Application Processed → Application Submitted |
+| International Relocation | Document Accepted → Document Reviewed → Immigration Pathway Determined → Application Initiated → Document Verified → Application Submitted → Awaiting Immigration Decision → Granted / Denied |
+| Childbirth Abroad / Medical Tourism | Medical Document Submitted → Reviewed → Specialist Review Initiated → Completed → Cost Quotation Determined → Initial Deposit Completed |
+| Corporate Travel | Consultation Initiated → Quotation Sent → Awaiting Organization Decision → Quotation Approved → Service Application Initiated → Completed |
+| Admission Assistance | Document Accepted → Document Reviewed → Application Initiated → Application Completed → Awaiting School Decision → Admission Offered / Admission Denied |
+
+Applications created before this change have no stored route, so they stay on the original 15-stage route.
+
+## Setup
+
+```bash
+npx prisma generate
+npm run db:deploy                              # applies 20261019000000_add_service_workflows
+npx tsx scripts/sync-service-workflows.ts      # adds the six services and turns off old service types
+npm run dev
+```
+
+Log in as admin (`admin@waypoint.com` / `password123`).
+
+---
+
+## Task 1 — The six services and their routes
+
+### Test Steps
+
+1. Go to **Settings → Service Workflows**. The six services are listed. Old service types such as *UK Tourist Visa* are shown as **inactive**.
+2. Click each service and check that its steps match the table above. For Visa Services, the main steps end in **Awaiting Embassy Decision**. **If approved** contains *Visa Granted* and **If refused** contains *Visa Denied*.
+3. Run the sync script again:
+   ```bash
+   npx tsx scripts/sync-service-workflows.ts
+   ```
+   Expected: `✓ 0 service types created, 0 routes seeded, 0 old service types turned off`.
+
+## Task 2 — Starting an application on a service
+
+### Test Steps
+
+1. Open a client. In **Services & Progress**, click **New Application**.
+2. Choose **Corporate Travel**. The route preview reads Consultation Initiated → Quotation Sent → … → Service Application Completed.
+3. Fill in the form and click **Start Corporate Travel**. The card shows **Stage 1**, **Corporate Travel**, **Step 1 of 6: Consultation Initiated**.
+4. Click **Open**. **Move Stage** offers only **Move to Quotation Sent**.
+5. Move the application through to **Service Application Completed**. The status becomes **COMPLETED**.
+
+## Task 3 — Granted or denied outcome
+
+### Test Steps
+
+1. Start a **Visa Services** application. Before the decision, the last roadmap step reads **Visa Granted or Denied** and is tagged **Outcome**.
+2. Move it to **Awaiting Embassy Decision**, as admin. The decision buttons read **Visa Granted**, **Visa Denied**, **Mark Withdrawn** and **Pending Action**.
+3. Click **Visa Granted**. The last step becomes **Visa Granted** with a tick, and the status is **COMPLETED**.
+4. On another Visa Services application, click **Visa Denied**. The last step reads **Visa Denied** and is shown in amber.
+
+## Task 4 — Adding the next service (Stage 2)
+
+### Test Steps
+
+1. On a client whose application is still in progress, check that there is no **Add next service** button.
+2. On the finished Visa Services application from Task 3, click **Add next service (Stage 2)**. Choose **Admission Assistance**, then click **Start Stage 2: Admission Assistance**.
+3. The card now reads **Stage 2 · Admission Assistance** at **Step 1 of 6: Document Accepted**, with status **NOT STARTED**.
+4. Under **Completed stages**, there is a row for **Stage 1 · Visa Services · Visa Granted · (date)**. Click it to expand the finished Visa Services roadmap.
+5. Open the application. The header reads **Stage 2: Admission Assistance**, and the roadmap uses only Stage 2 history. **Stage History** still lists everything for staff.
+6. Check the client's **Recent Activity**. It contains "Stage 2: Admission Assistance added after Visa Services was completed".
+
+## Task 5 — Client portal shows only the current route
+
+### Test Steps
+
+1. Open an Admission Assistance application and move it Document Accepted → Document Reviewed → back to Document Accepted → Document Reviewed → Application Initiated.
+2. Open `/client` and look up the client's file number.
+3. The card shows **Stage 2**, **Admission Assistance**, a progress bar, and **Journey Progress** listing only the Admission Assistance steps. Document Accepted and Document Reviewed are ticked, Application Initiated is **Current**, and the rest are greyed out. Nothing shows the back-and-forth moves, and the Stage 1 Visa Services route is not shown.
+4. The dates under the ticked steps are the first time each step was reached.
+5. Check the client's view of a denied application. The last step reads *Admission Denied* in red, with a "contact your assigned staff member" note.
+6. In the browser's network tab, the `/api/client-portal` response has no `stageHistory` and no `note` fields.
+
+## Task 6 — Admin route editor
+
+### Test Steps
+
+1. In **Settings → Service Workflows**, select **Consultation** and rename **Application Processed** to `Application Prepared`. Save.
+2. Start a new Consultation application. Its roadmap shows *Application Prepared*. Consultation applications created earlier keep the old label.
+3. Untick **Offered to new clients** on a service. It disappears from **New Application** and **Add next service**.
+
+## Task 7 — Pipeline board
+
+### Test Steps
+
+1. Go to **Pipeline** and select **Corporate Travel**. The columns are that route's six steps.
+2. Drag a card onto a column that isn't the next or previous step. The board shows an error and the card returns to where it was.
+
+## Task 8 — Existing applications keep working
+
+### Test Steps
+
+1. Open an application created before the migration. It shows the 15-stage roadmap and moves as before. The decision buttons read **Approve** and **Refuse**.
+
+## Task 9 — Automated checks
+
+```bash
+npm test          # 98 tests
+npm run build
+```
+
+## Task 10 — Moving an old application onto a service
+
+### Test Steps
+
+1. Open a client whose application was created before this update. In **Services & Progress**, the application shows an amber notice: **This application is on the old 15-stage route**.
+2. Click **Move to a service**, choose **Visa Services**, choose the step the client is at (for example **Visa Application Submitted**), and click **Move to Visa Services**.
+3. The card now shows the Visa Services roadmap at **Step 3 of 5**. The amber notice is gone.
+4. Open the application. **Stage History** still lists the old 15-stage moves, plus "Moved from the old 15-stage route … to Visa Services".
+5. Look the client up on `/client`. Only the Visa Services route is shown, and no dates from the old route appear on it.
+6. Repeat the move on another old application, choosing **Visa Granted (decision: approved)**. The status becomes **COMPLETED** and **Add next service (Stage 2)** becomes available.
+7. Log in as staff. The notice is shown but there is no **Move to a service** button.
+
+## Task 11 — "Add next service" while a route is in progress
+
+### Test Steps
+
+1. On an application that is still in progress, a greyed-out **Add next service (Stage 2)** is shown with "Available once *service* reaches its last step".
+2. Move the application to the last step of its route. The button becomes clickable.

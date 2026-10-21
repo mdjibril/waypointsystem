@@ -64,13 +64,13 @@ describe("getAllowedNextStages", () => {
     expect(getAllowedNextStages("FLIGHT_BOOKING")).toEqual(["PRE_DEPARTURE_BRIEFING", "DECISION"]);
   });
 
-  it("moves forward from pre-departure to client travels", () => {
-    expect(getAllowedNextStages("PRE_DEPARTURE_BRIEFING")).toEqual(["CLIENT_TRAVELS", "FLIGHT_BOOKING"]);
+  it("moves forward from pre-departure to client travels, with a way back to the decision", () => {
+    expect(getAllowedNextStages("PRE_DEPARTURE_BRIEFING")).toEqual(["CLIENT_TRAVELS", "FLIGHT_BOOKING", "DECISION"]);
   });
 
-  it("allows follow-up to be accessible from both terminal approved stages", () => {
-    expect(getAllowedNextStages("CLIENT_TRAVELS")).toEqual(["FOLLOW_UP", "DECISION"]);
-    expect(getAllowedNextStages("FOLLOW_UP")).toEqual(["FOLLOW_UP", "DECISION"]);
+  it("reaches follow-up from client travels and can always revisit the decision", () => {
+    expect(getAllowedNextStages("CLIENT_TRAVELS")).toEqual(["FOLLOW_UP", "PRE_DEPARTURE_BRIEFING", "DECISION"]);
+    expect(getAllowedNextStages("FOLLOW_UP")).toEqual(["CLIENT_TRAVELS", "DECISION"]);
   });
 });
 
