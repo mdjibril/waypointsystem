@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
+import { SESSION_COOKIE_OPTIONS } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
@@ -42,12 +43,7 @@ export async function POST(request: Request) {
     }
 
     const cookieStore = await cookies();
-    cookieStore.set("mock-auth-user", email, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-    });
+    cookieStore.set("mock-auth-user", email, SESSION_COOKIE_OPTIONS);
 
     const { passwordHash: _, ...userWithoutPassword } = user;
 

@@ -35,7 +35,6 @@ import {
   Edit,
   Workflow,
   History,
-  GripVertical,
   CheckSquare,
   Wallet,
   Receipt,
@@ -45,25 +44,19 @@ import {
   Activity,
   Trash2,
   ClipboardList,
+  Archive,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import { STAGE_ORDER, ALL_STAGES, STAGE_LABELS, getAllowedNextStages, stageForDecision, stageLabel, routeStages, decisionActionLabel, currentRouteHistory } from "@/lib/workflow";
+import { STAGE_ORDER, ALL_STAGES, STAGE_LABELS, getAllowedNextStages, stageForDecision, stageLabel, routeStages, decisionActionLabel, currentRouteHistory, isTerminalStage, WorkflowRoute } from "@/lib/workflow";
 import { routeForApplication } from "@/lib/serviceWorkflows";
 import { ClientServicesPanel, RoutePreview } from "@/components/ClientServicesPanel";
 import { ServiceRoadmap } from "@/components/ServiceRoadmap";
 import { ServiceWorkflowEditor } from "@/components/ServiceWorkflowEditor";
 import { CURRENCY_PRESETS, formatAmount } from "@/lib/currency";
 import { amountToWords } from "@/lib/numberToWords";
+import { canTransitionApplication as canTransitionApplicationRule } from "@/lib/permissions";
+import { WorkflowStage } from "@/types";
 import { downloadReceiptPdf } from "@/lib/receiptPdf";
 
 const RECEIPT_SERVICE_OPTIONS = [
@@ -101,72 +94,100 @@ function generateReceiptNumber(): string {
   return `RCT-${dateStr}-${padded}`;
 }
 
-function PipelineCard({ app, draggable, onOpen }: { app: any; draggable: boolean; onOpen: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `app-${app.id}`,
-    data: { app },
-    disabled: !draggable,
-  });
+// OUTSTANDING = a balance the client still owes (amount is what remains); SETTLED = an outstanding
+// balance that has been fully paid off. PENDING / CONFIRMED / REJECTED are payments received.
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  OUTSTANDING: "Outstanding",
+  SETTLED: "Paid off",
+  PENDING: "Awaiting confirmation",
+  CONFIRMED: "Confirmed",
+  REJECTED: "Rejected",
+};
 
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-    : undefined;
+function paymentStatusClass(status: string): string {
+  if (status === "CONFIRMED") return "bg-green-500/10 text-green-600";
+  if (status === "SETTLED") return "bg-blue-500/10 text-blue-600";
+  if (status === "REJECTED") return "bg-red-500/10 text-red-500";
+  if (status === "OUTSTANDING") return "bg-orange-500/10 text-orange-600";
+  return "bg-yellow-500/10 text-yellow-600";
+}
+
+// Payments made towards an outstanding balance carry "Payment towards INV-…" in their notes.
+function paymentsTowards(paymentsList: any[], outstanding: any): any[] {
+  const base = `Payment towards ${outstanding.invoiceNumber}`;
+  return paymentsList.filter((p: any) => p.id !== outstanding.id && (p.notes === base || p.notes?.startsWith(`${base} `)));
+}
+
+// The balance originally owed: what is still owed plus everything paid towards it (rejected payments excluded).
+function originalOutstandingAmount(paymentsList: any[], outstanding: any): number {
+  return outstanding.amount + paymentsTowards(paymentsList, outstanding)
+    .filter((p: any) => p.status !== "REJECTED")
+    .reduce((sum: number, p: any) => sum + p.amount, 0);
+}
+
+// Type-to-search client picker
+function ClientSearchInput({ clients, value, onChange, placeholder }: { clients: any[]; value: string; onChange: (id: string) => void; placeholder?: string }) {
+  const clientLabel = (c: any) => `${c.firstName} ${c.lastName} — ${c.fileNumber}`;
+  const selected = clients.find((c: any) => String(c.id) === value);
+  const [query, setQuery] = useState(selected ? clientLabel(selected) : "");
+  const [open, setOpen] = useState(false);
+
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = (selected && query === clientLabel(selected) ? clients : clients.filter((c: any) => {
+    const haystack = `${c.firstName} ${c.lastName} ${c.fileNumber} ${c.phone || ""} ${c.email || ""}`.toLowerCase();
+    return words.every((w) => haystack.includes(w));
+  })).slice(0, 8);
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`bg-card border border-border rounded-xl p-3 shadow-sm text-xs transition-colors ${
-        isDragging ? "opacity-40" : "hover:border-primary/50"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <button onClick={onOpen} className="text-left font-bold text-foreground hover:text-primary hover:underline cursor-pointer">
-          {app.client?.firstName} {app.client?.lastName}
-        </button>
-        {draggable && (
-          <span {...attributes} {...listeners} className="cursor-grab text-muted-foreground hover:text-foreground touch-none">
-            <GripVertical className="h-3.5 w-3.5" />
-          </span>
-        )}
-      </div>
-      <p className="text-[10px] text-muted-foreground mt-1">{app.serviceType}</p>
-      <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{app.client?.fileNumber}</p>
-      {app.assignedStaff?.name && (
-        <p className="text-[10px] text-muted-foreground mt-1">{app.assignedStaff.name}</p>
+    <div className="relative">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+          if (value) onChange("");
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder || "Type a client name or file number..."}
+        className="w-full bg-muted/20 border border-border rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+      />
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-card border border-border rounded-xl shadow-lg max-h-56 overflow-y-auto">
+          {matches.length === 0 ? (
+            <p className="px-3 py-2.5 text-xs text-muted-foreground">No client matches &quot;{query}&quot;.</p>
+          ) : (
+            matches.map((c: any) => (
+              <button
+                key={c.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(String(c.id));
+                  setQuery(clientLabel(c));
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2 text-xs hover:bg-muted/40 cursor-pointer ${String(c.id) === value ? "bg-primary/5" : ""}`}
+              >
+                <span className="font-semibold text-foreground">{c.firstName} {c.lastName}</span>
+                <span className="text-muted-foreground font-mono ml-2 text-[10px]">{c.fileNumber}</span>
+              </button>
+            ))
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function PipelineColumn({ stage, apps, dropState, children }: { stage: string; apps: any[]; dropState: "neutral" | "valid" | "invalid"; children: React.ReactNode }) {
-  const { setNodeRef } = useDroppable({ id: stage });
-  return (
-    <div
-      ref={setNodeRef}
-      className={`bg-muted/10 border rounded-2xl p-3 flex flex-col min-w-64 w-64 flex-shrink-0 min-h-96 transition-colors ${
-        dropState === "valid" ? "border-primary bg-primary/5" : dropState === "invalid" ? "border-destructive/50 bg-destructive/5" : "border-border"
-      }`}
-    >
-      <div className="flex justify-between items-center mb-3 pb-2 border-b border-border">
-        <span className="font-bold text-[11px] text-foreground uppercase tracking-wide">{STAGE_LABELS[stage as keyof typeof STAGE_LABELS]}</span>
-        <span className="text-[10px] font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{apps.length}</span>
-      </div>
-      <div className="space-y-2 flex-1 overflow-y-auto">
-        {apps.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground text-center py-6">No applications</p>
-        ) : (
-          children
-        )}
-      </div>
-    </div>
-  );
-}
+const ARCHIVE_VIEW = "__archive__";
 
-function outstandingByCurrency(paymentsList: any[]): { currency: string; total: number }[] {
+function outstandingByCurrency(paymentsList: any[], statuses: string[] = ["OUTSTANDING"]): { currency: string; total: number }[] {
   const totals: Record<string, number> = {};
   paymentsList
-    .filter((p: any) => p.status === "PENDING")
+    .filter((p: any) => statuses.includes(p.status))
     .forEach((p: any) => {
       totals[p.currency] = (totals[p.currency] || 0) + p.amount;
     });
@@ -257,7 +278,12 @@ export default function Home() {
   const [newAppClientId, setNewAppClientId] = useState("");
   const [newAppServiceType, setNewAppServiceType] = useState(""); // service type id
   const [serviceTypes, setServiceTypes] = useState<any[]>([]);
-  const [pipelineServiceFilter, setPipelineServiceFilter] = useState("all");
+  // Pipeline: null = service overview, a service name = that service's clients, ARCHIVE_VIEW = archived clients
+  const [pipelineView, setPipelineView] = useState<string | null>(null);
+  const [pipelineStageFocus, setPipelineStageFocus] = useState("all");
+  const [pipelineSearch, setPipelineSearch] = useState("");
+  const [movingAppId, setMovingAppId] = useState<number | null>(null);
+  const [archiveConfirmId, setArchiveConfirmId] = useState<number | null>(null);
   const [newAppDestination, setNewAppDestination] = useState("");
   const [newAppPurpose, setNewAppPurpose] = useState("");
   const [newAppTravelDate, setNewAppTravelDate] = useState("");
@@ -281,7 +307,6 @@ export default function Home() {
 
   // Pipeline Board State
   const [pipelineError, setPipelineError] = useState<string | null>(null);
-  const [activeDragApp, setActiveDragApp] = useState<any>(null);
 
   // Quality Review State
   const [qualityReviews, setQualityReviews] = useState<any[]>([]);
@@ -373,6 +398,17 @@ export default function Home() {
   const [addPaymentError, setAddPaymentError] = useState<string | null>(null);
   const [addPaymentSuccess, setAddPaymentSuccess] = useState<string | null>(null);
   const [addPaymentLoading, setAddPaymentLoading] = useState(false);
+  const [newPaymentType, setNewPaymentType] = useState<"PAYMENT" | "OUTSTANDING">("PAYMENT");
+  const [paymentFilter, setPaymentFilter] = useState<"all" | "OUTSTANDING" | "PENDING" | "CONFIRMED" | "SETTLED" | "REJECTED">("all");
+  const [selectedPayment, setSelectedPayment] = useState<any | null>(null);
+  const [confirmDeletePayment, setConfirmDeletePayment] = useState(false);
+  const [deletePaymentLoading, setDeletePaymentLoading] = useState(false);
+  const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
+  const [payOffAmount, setPayOffAmount] = useState("");
+  const [payOffMethod, setPayOffMethod] = useState("Bank Transfer");
+  const [payOffNote, setPayOffNote] = useState("");
+  const [payOffLoading, setPayOffLoading] = useState(false);
+  const [editOutstanding, setEditOutstanding] = useState<{ amount: string; notes: string } | null>(null);
 
   // Receipt Generator State
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
@@ -515,16 +551,22 @@ export default function Home() {
   const serviceTypeOptions = serviceTypes.map((s: any) => ({ value: String(s.id), label: s.name }));
   const serviceNameOptions = serviceTypes.map((s: any) => ({ value: s.name, label: s.name }));
 
-  // Pipeline columns: the selected service's route, or every stage in use when showing all services
-  const pipelineApps = pipelineServiceFilter === "all"
-    ? applications
-    : applications.filter((a: any) => a.serviceType === pipelineServiceFilter);
-  const pipelineFilterService = serviceTypes.find((s: any) => s.name === pipelineServiceFilter);
-  const pipelineStageSet = new Set<string>([
-    ...(pipelineFilterService ? routeStages(pipelineFilterService.route) : pipelineServiceFilter === "all" ? STAGE_ORDER : []),
-    ...pipelineApps.map((a: any) => a.currentStage),
-  ]);
-  const pipelineColumns = ALL_STAGES.filter((stage) => pipelineStageSet.has(stage));
+  // Pipeline: archived applications are kept out of the service routes
+  const activePipelineApps = applications.filter((a: any) => a.status !== "ARCHIVED");
+  const archivedPipelineApps = applications.filter((a: any) => a.status === "ARCHIVED");
+  // Offered services, plus any service that only older applications still use
+  const pipelineServices: { name: string; description?: string | null; route: WorkflowRoute }[] = [
+    ...serviceTypes
+      .filter((sv: any) => sv.isActive || activePipelineApps.some((a: any) => a.serviceType === sv.name))
+      .map((sv: any) => ({ name: sv.name, description: sv.description, route: sv.route })),
+    ...[...new Set(activePipelineApps.map((a: any) => a.serviceType as string))]
+      .filter((name) => !serviceTypes.some((sv: any) => sv.name === name))
+      .map((name) => ({
+        name,
+        description: null,
+        route: routeForApplication(activePipelineApps.find((a: any) => a.serviceType === name)),
+      })),
+  ];
 
   // Load applications when Applications tab is selected
   const fetchApplications = async () => {
@@ -1013,48 +1055,40 @@ export default function Home() {
     }
   };
 
-  const canTransitionApplication = (app: any) => {
+  // Same rule as the server: admins move anything; staff move their assigned clients, except into or
+  // out of sensitive stages (Decision, Application Submitted, Application Review), which stay with admins.
+  const canTransitionApplication = (app: any, toStage?: string) => {
     if (!user) return false;
-    if (user.role.toUpperCase() === "ADMIN") return true;
-    return false;
+    return canTransitionApplicationRule(
+      user.role.toUpperCase(),
+      app.client?.assignedStaffId ?? null,
+      user.id,
+      toStage ? app.currentStage : undefined,
+      toStage as WorkflowStage | undefined,
+    );
   };
 
-  // Pipeline board drag-and-drop
-  const pipelineSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
-  const handlePipelineDragStart = (event: DragStartEvent) => {
-    setActiveDragApp(event.active.data.current?.app || null);
-  };
-
-  const handlePipelineDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveDragApp(null);
-    if (!over) return;
-
-    const app = active.data.current?.app;
-    const toStage = String(over.id);
-    if (!app || app.currentStage === toStage) return;
-
-    const appRoute = routeForApplication(app);
-    if (!(getAllowedNextStages(app.currentStage, appRoute) as string[]).includes(toStage)) {
-      setPipelineError(
-        (routeStages(appRoute) as string[]).includes(toStage)
-          ? `Cannot move from ${stageLabel(app.currentStage, appRoute)} to ${stageLabel(toStage, appRoute)}`
-          : `${stageLabel(toStage)} is not part of the ${app.serviceType} route`
-      );
-      return;
-    }
-
-    // Reverting from a terminal path back to Decision clears the stale decision outcome
-    const decisionStatus = toStage === "DECISION" && app.currentStage !== "DECISION" ? null : undefined;
-
-    // Move the card instantly; only snap it back if the server rejects the move
-    const previousStage = app.currentStage;
-    setApplications((prev) => prev.map((a) => (a.id === app.id ? { ...a, currentStage: toStage } : a)));
-
-    const success = await moveApplicationStage(app.id, toStage, decisionStatus);
-    if (!success) {
-      setApplications((prev) => prev.map((a) => (a.id === app.id ? { ...a, currentStage: previousStage } : a)));
+  // Archive a finished application (or restore it) so it leaves / rejoins its service's pipeline
+  const setApplicationArchived = async (app: any, archived: boolean) => {
+    setMovingAppId(app.id);
+    setPipelineError(null);
+    try {
+      const res = await fetch(`/api/applications/${app.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPipelineError(data.error || (archived ? "Failed to archive application" : "Failed to restore application"));
+        return;
+      }
+      setApplications((prev) => prev.map((a) => (a.id === app.id ? { ...a, ...data.application } : a)));
+      setArchiveConfirmId(null);
+    } catch {
+      setPipelineError("Connection error. Please try again.");
+    } finally {
+      setMovingAppId(null);
     }
   };
 
@@ -1549,6 +1583,10 @@ export default function Home() {
 
   const handleAddPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newPaymentClientId) {
+      setAddPaymentError("Type the client's name and pick them from the suggestions.");
+      return;
+    }
     setAddPaymentLoading(true);
     setAddPaymentError(null);
     setAddPaymentSuccess(null);
@@ -1579,6 +1617,7 @@ export default function Home() {
           notes: newPaymentNotes || undefined,
           receiptFileName: newPaymentFile?.name,
           receiptUrl,
+          type: newPaymentType,
         }),
       });
 
@@ -1587,7 +1626,7 @@ export default function Home() {
       if (!res.ok) {
         setAddPaymentError(data.error || "Failed to record payment");
       } else {
-        setAddPaymentSuccess("Payment recorded successfully!");
+        setAddPaymentSuccess(newPaymentType === "OUTSTANDING" ? "Outstanding balance recorded successfully!" : "Payment recorded successfully!");
         setNewPaymentClientId("");
         setNewPaymentApplicationId("");
         setNewPaymentAmount("");
@@ -1617,9 +1656,103 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setPayments((prev) => prev.map((p) => (p.id === paymentId ? data.payment : p)));
+        setSelectedPayment((prev: any) => (prev?.id === paymentId ? data.payment : prev));
+        fetchPayments();
       }
     } catch (err) {
       console.error("Failed to update payment:", err);
+    }
+  };
+
+  const openRecordPayment = (type: "PAYMENT" | "OUTSTANDING") => {
+    setNewPaymentType(type);
+    setIsAddPaymentOpen(true);
+    setAddPaymentError(null);
+    setAddPaymentSuccess(null);
+  };
+
+  const openPaymentDetails = (payment: any) => {
+    setSelectedPayment(payment);
+    setConfirmDeletePayment(false);
+    setPaymentActionError(null);
+    setEditOutstanding(null);
+    setPayOffAmount(payment.status === "OUTSTANDING" ? String(payment.amount) : "");
+    setPayOffMethod("Bank Transfer");
+    setPayOffNote("");
+  };
+
+  // Record a (part-)payment against an outstanding balance
+  const handlePayTowardsOutstanding = async (outstanding: any) => {
+    const amount = Number(payOffAmount);
+    if (!(amount > 0) || amount > outstanding.amount) {
+      setPaymentActionError(`Enter an amount between 0 and ${formatAmount(outstanding.amount, outstanding.currency)}.`);
+      return;
+    }
+    setPayOffLoading(true);
+    setPaymentActionError(null);
+    try {
+      const res = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outstandingId: outstanding.id, amount, method: payOffMethod, notes: payOffNote.trim() || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPaymentActionError(data.error || "Failed to record payment");
+        return;
+      }
+      setPayments((prev) => [data.payment, ...prev.map((p) => (p.id === outstanding.id ? data.outstanding : p))]);
+      openPaymentDetails(data.outstanding);
+    } catch {
+      setPaymentActionError("Connection error. Please try again.");
+    } finally {
+      setPayOffLoading(false);
+    }
+  };
+
+  const handleSaveOutstandingEdit = async (outstanding: any) => {
+    if (!editOutstanding) return;
+    const amount = Number(editOutstanding.amount);
+    if (!(amount > 0)) {
+      setPaymentActionError("Amount must be greater than 0.");
+      return;
+    }
+    setPaymentActionError(null);
+    try {
+      const res = await fetch("/api/payments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: outstanding.id, amount, notes: editOutstanding.notes }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPaymentActionError(data.error || "Failed to update outstanding balance");
+        return;
+      }
+      setPayments((prev) => prev.map((p) => (p.id === outstanding.id ? data.payment : p)));
+      openPaymentDetails(data.payment);
+    } catch {
+      setPaymentActionError("Connection error. Please try again.");
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: number) => {
+    setDeletePaymentLoading(true);
+    setPaymentActionError(null);
+    try {
+      const res = await fetch(`/api/payments?id=${paymentId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPaymentActionError(data.error || "Failed to delete payment");
+        return;
+      }
+      setPayments((prev) => prev.filter((p) => p.id !== paymentId));
+      setSelectedPayment(null);
+      fetchPayments();
+    } catch {
+      setPaymentActionError("Connection error. Please try again.");
+    } finally {
+      setDeletePaymentLoading(false);
     }
   };
 
@@ -1902,7 +2035,7 @@ export default function Home() {
                       <TrendingUp className="h-5 w-5" />
                     </div>
                   </div>
-                  <h4 className="text-2xl font-black mt-4 text-foreground">{applications.length}</h4>
+                  <h4 className="text-2xl font-black mt-4 text-foreground">{applications.filter((a: any) => a.status !== "ARCHIVED").length}</h4>
                   <p className="text-xs text-muted-foreground font-medium mt-1">Visa Processing Pipeline</p>
                 </div>
 
@@ -1928,11 +2061,19 @@ export default function Home() {
                   <p className="text-xs text-muted-foreground font-medium mt-1">Overdue Staff Tasks</p>
                 </div>
 
-                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentFilter("OUTSTANDING");
+                    setCurrentTab("payments");
+                  }}
+                  className="bg-card border border-border rounded-2xl p-5 shadow-sm text-left hover:border-primary/40 hover:shadow-md transition-all cursor-pointer"
+                >
                   <div className="flex justify-between items-start">
                     <div className="bg-green-500/10 p-2.5 rounded-xl text-green-600">
                       <Wallet className="h-5 w-5" />
                     </div>
+                    <span className="text-[10px] font-bold text-primary">View details →</span>
                   </div>
                   {outstandingByCurrency(payments).length === 0 ? (
                     <h4 className="text-2xl font-black mt-4 text-foreground">—</h4>
@@ -1944,7 +2085,10 @@ export default function Home() {
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground font-medium mt-1">Outstanding Balance</p>
-                </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {payments.filter((p: any) => p.status === "OUTSTANDING").length} client balance(s) owed
+                  </p>
+                </button>
               </div>
 
               {/* Pipeline Chart + Decision Outcomes */}
@@ -1952,18 +2096,24 @@ export default function Home() {
                 <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
                   <h4 className="font-bold text-sm text-foreground mb-4">Pipeline Overview</h4>
                   <div className="space-y-2.5">
-                    {STAGE_ORDER.slice(0, 10).map((stage) => {
-                      const count = applications.filter((a: any) => a.currentStage === stage).length;
-                      const maxCount = Math.max(...STAGE_ORDER.slice(0, 10).map((s) => applications.filter((a: any) => a.currentStage === s).length), 1);
-                      const pct = Math.round((count / (maxCount || 1)) * 100);
+                    {pipelineServices.length === 0 && <p className="text-xs text-muted-foreground">No services yet.</p>}
+                    {pipelineServices.map((service) => {
+                      const countFor = (name: string) => activePipelineApps.filter((a: any) => a.serviceType === name).length;
+                      const count = countFor(service.name);
+                      const maxCount = Math.max(...pipelineServices.map((sv) => countFor(sv.name)), 1);
+                      const pct = Math.round((count / maxCount) * 100);
                       return (
-                        <div key={stage} className="flex items-center gap-3">
-                          <span className="text-[11px] font-semibold text-foreground w-40 flex-shrink-0 truncate">{STAGE_LABELS[stage]}</span>
+                        <button
+                          key={service.name}
+                          onClick={() => { setPipelineView(service.name); setPipelineStageFocus("all"); setPipelineSearch(""); setCurrentTab("pipeline"); }}
+                          className="w-full flex items-center gap-3 cursor-pointer group"
+                        >
+                          <span className="text-[11px] font-semibold text-foreground w-28 sm:w-48 flex-shrink-0 truncate text-left group-hover:text-primary">{service.name}</span>
                           <div className="flex-1 h-5 bg-muted/30 rounded-full overflow-hidden">
                             <div className="h-full bg-primary/70 rounded-full transition-all duration-500" style={{ width: `${pct}%` }}></div>
                           </div>
                           <span className="text-[10px] font-bold text-muted-foreground w-6 text-right">{count}</span>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -2402,7 +2552,7 @@ export default function Home() {
               )}
 
               {/* Client List Table */}
-              <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+              <div className="bg-card border border-border rounded-2xl overflow-x-auto shadow-sm">
                 {clientsLoading ? (
                   <div className="py-12 flex justify-center items-center">
                     <div className="h-8 w-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -2447,7 +2597,7 @@ export default function Home() {
                   }
 
                   return (
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-collapse min-w-[640px]">
                     <thead>
                       <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
                         <th className="py-3.5 px-6">File Number</th>
@@ -2974,11 +3124,7 @@ export default function Home() {
                             <p className="text-xs font-bold text-foreground font-mono">{p.invoiceNumber}</p>
                             <p className="text-[10px] text-muted-foreground">{formatAmount(p.amount, p.currency)} · {p.method || "No method"}</p>
                           </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            p.status === "CONFIRMED" ? "bg-green-500/10 text-green-600" :
-                            p.status === "REJECTED" ? "bg-red-500/10 text-red-500" :
-                            "bg-yellow-500/10 text-yellow-600"
-                          }`}>{p.status}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${paymentStatusClass(p.status)}`}>{PAYMENT_STATUS_LABELS[p.status] || p.status}</span>
                         </div>
                       ))}
                     </div>
@@ -3177,7 +3323,7 @@ export default function Home() {
               </div>
 
               {/* Applications Table */}
-              <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+              <div className="bg-card border border-border rounded-2xl overflow-x-auto shadow-sm">
                 {applicationsLoading ? (
                   <div className="py-12 flex justify-center items-center">
                     <div className="h-8 w-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -3189,7 +3335,7 @@ export default function Home() {
                     <p className="text-xs mt-1">Click "New Application" to create the first application.</p>
                   </div>
                 ) : (
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-collapse min-w-[640px]">
                     <thead>
                       <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
                         <th className="py-3.5 px-6">Client</th>
@@ -3369,6 +3515,10 @@ export default function Home() {
                   </h4>
                   {!canTransitionApplication(selectedApplication) ? (
                     <p className="text-xs text-muted-foreground">You do not have permission to move this application.</p>
+                  ) : selectedApplication.status === "ARCHIVED" ? (
+                    <p className="text-xs text-muted-foreground">This application is archived. Restore it from the Pipeline archive to move it.</p>
+                  ) : selectedApplication.currentStage === "DECISION" && !canTransitionApplication(selectedApplication, stageForDecision("APPROVED", routeForApplication(selectedApplication)) || "") ? (
+                    <p className="text-xs text-muted-foreground">An admin records the decision for this application.</p>
                   ) : selectedApplication.currentStage === "DECISION" ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button
@@ -3402,7 +3552,9 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-2">
-                      {getAllowedNextStages(selectedApplication.currentStage, routeForApplication(selectedApplication)).map((stage) => (
+                      {getAllowedNextStages(selectedApplication.currentStage, routeForApplication(selectedApplication))
+                        .filter((stage) => canTransitionApplication(selectedApplication, stage))
+                        .map((stage) => (
                         <button
                           key={stage}
                           disabled={stageActionLoading}
@@ -3683,11 +3835,7 @@ export default function Home() {
                             <p className="text-xs font-bold text-foreground font-mono">{p.invoiceNumber}</p>
                             <p className="text-[10px] text-muted-foreground">{formatAmount(p.amount, p.currency)} · {p.method || "No method"}</p>
                           </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            p.status === "CONFIRMED" ? "bg-green-500/10 text-green-600" :
-                            p.status === "REJECTED" ? "bg-red-500/10 text-red-500" :
-                            "bg-yellow-500/10 text-yellow-600"
-                          }`}>{p.status}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${paymentStatusClass(p.status)}`}>{PAYMENT_STATUS_LABELS[p.status] || p.status}</span>
                         </div>
                       ))}
                     </div>
@@ -3921,19 +4069,6 @@ export default function Home() {
 
           {currentTab === "pipeline" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div>
-                <h3 className="text-lg font-bold text-foreground">Pipeline Board</h3>
-                <p className="text-xs text-muted-foreground">Drag a card into a column to move it to that stage, or click a card to open its detail page. Cards can only move along their own service's route.</p>
-              </div>
-
-              <div className="max-w-xs">
-                <Dropdown
-                  value={pipelineServiceFilter}
-                  onChange={setPipelineServiceFilter}
-                  options={[{ value: "all", label: "All services" }, ...serviceNameOptions]}
-                />
-              </div>
-
               {pipelineError && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive flex items-center justify-between gap-4">
                   <span>{pipelineError}</span>
@@ -3941,39 +4076,340 @@ export default function Home() {
                 </div>
               )}
 
-              {applicationsLoading ? (
+              {applicationsLoading && applications.length === 0 ? (
                 <div className="py-20 flex justify-center items-center">
                   <div className="h-10 w-10 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
                 </div>
-              ) : (
-                <DndContext sensors={pipelineSensors} onDragStart={handlePipelineDragStart} onDragEnd={handlePipelineDragEnd}>
-                  <div className="flex gap-4 overflow-x-auto pb-4">
-                    {pipelineColumns.map((stage) => {
-                      const stageApps = pipelineApps.filter((a: any) => a.currentStage === stage);
-                      const allowedForActive = activeDragApp ? getAllowedNextStages(activeDragApp.currentStage, routeForApplication(activeDragApp)) : [];
-                      const dropState: "neutral" | "valid" | "invalid" = !activeDragApp
-                        ? "neutral"
-                        : allowedForActive.includes(stage)
-                        ? "valid"
-                        : "invalid";
+              ) : pipelineView === null ? (
+                /* ── Overview: one card per service ── */
+                <>
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Pipeline</h3>
+                    <p className="text-xs text-muted-foreground">Each service has its own route. Open a service to see its clients and move them along the route.</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {pipelineServices.map((service) => {
+                      const apps = activePipelineApps.filter((a: any) => a.serviceType === service.name);
+                      const finished = apps.filter((a: any) => isTerminalStage(a.currentStage, routeForApplication(a))).length;
+                      const mainSteps = service.route.steps.filter((st: any) => st.branch === "MAIN");
+                      const busiest = routeStages(service.route)
+                        .map((stage) => ({ stage, count: apps.filter((a: any) => a.currentStage === stage).length }))
+                        .filter((x) => x.count > 0)
+                        .sort((a, b) => b.count - a.count)
+                        .slice(0, 3);
                       return (
-                        <PipelineColumn key={stage} stage={stage} apps={stageApps} dropState={dropState}>
-                          {stageApps.map((app: any) => (
-                            <PipelineCard
-                              key={app.id}
-                              app={app}
-                              draggable={canTransitionApplication(app) && app.currentStage !== "DECISION"}
-                              onOpen={() => { setCurrentTab("applications"); viewApplication(app.id); }}
-                            />
-                          ))}
-                        </PipelineColumn>
+                        <button
+                          key={service.name}
+                          onClick={() => { setPipelineView(service.name); setPipelineStageFocus("all"); setPipelineSearch(""); }}
+                          className="bg-card border border-border rounded-2xl p-5 shadow-sm text-left hover:border-primary/50 hover:shadow-md transition-all cursor-pointer flex flex-col gap-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-bold text-sm text-foreground">{service.name}</p>
+                              {service.description && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{service.description}</p>}
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-2xl font-black text-foreground leading-none">{apps.length}</p>
+                              <p className="text-[10px] text-muted-foreground">client{apps.length === 1 ? "" : "s"}</p>
+                            </div>
+                          </div>
+                          {/* Route at a glance: one segment per main step, filled when clients are on it */}
+                          <div className="flex gap-0.5">
+                            {mainSteps.map((st: any) => {
+                              const count = apps.filter((a: any) => a.currentStage === st.stage).length;
+                              return (
+                                <div
+                                  key={st.stage}
+                                  title={`${stageLabel(st.stage, service.route)}: ${count}`}
+                                  className={`h-1.5 flex-1 rounded-full ${count > 0 ? "bg-primary" : "bg-muted"}`}
+                                />
+                              );
+                            })}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 min-h-[22px]">
+                            {busiest.length === 0 ? (
+                              <span className="text-[10px] text-muted-foreground">No active clients</span>
+                            ) : (
+                              busiest.map((b) => (
+                                <span key={b.stage} className="text-[10px] font-semibold bg-muted/40 text-foreground px-2 py-0.5 rounded-full">
+                                  {stageLabel(b.stage, service.route)} · {b.count}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-2 border-t border-border/60">
+                            <span>{mainSteps.length} step route</span>
+                            {finished > 0 ? (
+                              <span className="font-bold text-green-600">{finished} finished · ready to archive</span>
+                            ) : (
+                              <span className="font-bold text-primary">Open →</span>
+                            )}
+                          </div>
+                        </button>
                       );
                     })}
+
+                    <button
+                      onClick={() => { setPipelineView(ARCHIVE_VIEW); setPipelineSearch(""); }}
+                      className="bg-muted/10 border border-dashed border-border rounded-2xl p-5 text-left hover:border-primary/50 transition-all cursor-pointer flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <p className="font-bold text-sm text-foreground flex items-center gap-2"><Archive className="h-4 w-4" /> Archive</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Clients who finished their service.</p>
+                      </div>
+                      <p className="text-2xl font-black text-foreground">{archivedPipelineApps.length}</p>
+                    </button>
                   </div>
-                  <DragOverlay>
-                    {activeDragApp ? <PipelineCard app={activeDragApp} draggable={false} onOpen={() => {}} /> : null}
-                  </DragOverlay>
-                </DndContext>
+                </>
+              ) : (
+                /* ── Service (or archive) detail ── */
+                (() => {
+                  const isArchive = pipelineView === ARCHIVE_VIEW;
+                  const service = pipelineServices.find((sv) => sv.name === pipelineView);
+                  const search = pipelineSearch.trim().toLowerCase();
+                  const matchesSearch = (a: any) =>
+                    !search || `${a.client?.firstName} ${a.client?.lastName} ${a.client?.fileNumber} ${a.assignedStaff?.name || ""}`.toLowerCase().includes(search);
+                  const apps = (isArchive ? archivedPipelineApps : activePipelineApps.filter((a: any) => a.serviceType === pipelineView)).filter(matchesSearch);
+                  const route = service?.route;
+                  const routeStageList: string[] = route ? routeStages(route) : [];
+                  const extraStages = [...new Set(apps.map((a: any) => a.currentStage as string))].filter((st) => !routeStageList.includes(st));
+                  const sections = isArchive ? [] : [...routeStageList, ...extraStages];
+                  const branchOf = (stage: string) => route?.steps.find((st: any) => st.stage === stage)?.branch;
+
+                  const clientRow = (app: any) => {
+                    const appRoute = routeForApplication(app);
+                    const stages = routeStages(appRoute) as string[];
+                    const allowed = getAllowedNextStages(app.currentStage, appRoute) as string[];
+                    const curIdx = stages.indexOf(app.currentStage);
+                    const canMove = canTransitionApplication(app);
+                    const finished = isTerminalStage(app.currentStage, appRoute);
+                    const permitted = allowed.filter((st) => canTransitionApplication(app, st));
+                    const forward = permitted.filter((st) => curIdx === -1 || stages.indexOf(st) > curIdx);
+                    const back = permitted.filter((st) => curIdx !== -1 && stages.indexOf(st) < curIdx);
+                    const canDecide = app.currentStage === "DECISION" && canTransitionApplication(app, stageForDecision("APPROVED", appRoute) || "");
+                    const busy = movingAppId === app.id;
+                    const move = async (toStage: string, decisionStatus?: string | null) => {
+                      setMovingAppId(app.id);
+                      await moveApplicationStage(app.id, toStage, decisionStatus);
+                      setMovingAppId(null);
+                    };
+                    return (
+                      <div key={app.id} className="bg-card border border-border rounded-xl p-3 flex flex-col lg:flex-row lg:items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <button
+                            onClick={() => { setCurrentTab("applications"); viewApplication(app.id); }}
+                            className="font-bold text-sm text-foreground hover:text-primary hover:underline cursor-pointer text-left"
+                          >
+                            {app.client?.firstName} {app.client?.lastName}
+                          </button>
+                          <p className="text-[10px] text-muted-foreground">
+                            <span className="font-mono">{app.client?.fileNumber}</span>
+                            {app.destinationCountry ? ` · ${app.destinationCountry}` : ""}
+                            {app.assignedStaff?.name ? ` · ${app.assignedStaff.name}` : ""}
+                          </p>
+                          {isArchive && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{app.serviceType} · finished at {stageLabel(app.currentStage, appRoute)}</p>
+                          )}
+                        </div>
+
+                        {isArchive ? (
+                          canMove && (
+                            <button
+                              disabled={busy}
+                              onClick={() => setApplicationArchived(app, false)}
+                              className="text-[11px] font-bold px-3 py-2 rounded-lg border border-border bg-card hover:bg-secondary cursor-pointer disabled:opacity-50 flex items-center gap-1.5 self-start lg:self-auto"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" /> Restore
+                            </button>
+                          )
+                        ) : !canMove ? (
+                          <span className="text-[10px] text-muted-foreground">Only admins and the assigned staff member can move this client</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {back.map((st) => (
+                              <button
+                                key={st}
+                                disabled={busy}
+                                onClick={() => move(st, st === "DECISION" ? null : undefined)}
+                                className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                              >
+                                <ChevronLeft className="h-3 w-3" /> {stageLabel(st, appRoute)}
+                              </button>
+                            ))}
+                            {app.currentStage === "DECISION" && !canDecide ? (
+                              <span className="text-[10px] text-muted-foreground self-center">An admin records the decision</span>
+                            ) : app.currentStage === "DECISION" ? (
+                              <>
+                                <button
+                                  disabled={busy}
+                                  onClick={() => move(stageForDecision("APPROVED", appRoute) || "FLIGHT_BOOKING", "APPROVED")}
+                                  className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer disabled:opacity-50"
+                                >
+                                  ✓ {decisionActionLabel(appRoute, "APPROVED")}
+                                </button>
+                                <button
+                                  disabled={busy}
+                                  onClick={() => move(stageForDecision("REFUSED", appRoute) || "VISA_REFUSED_PATH", "REFUSED")}
+                                  className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-600 hover:bg-red-500/20 cursor-pointer disabled:opacity-50"
+                                >
+                                  ✕ {decisionActionLabel(appRoute, "REFUSED")}
+                                </button>
+                              </>
+                            ) : (
+                              forward.map((st) => (
+                                <button
+                                  key={st}
+                                  disabled={busy}
+                                  onClick={() => move(st)}
+                                  className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground hover:opacity-90 cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                                >
+                                  {stageLabel(st, appRoute)} <ChevronRight className="h-3 w-3" />
+                                </button>
+                              ))
+                            )}
+                            {finished && (
+                              archiveConfirmId === app.id ? (
+                                <span className="flex gap-1.5">
+                                  <button
+                                    disabled={busy}
+                                    onClick={() => setApplicationArchived(app, true)}
+                                    className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-green-600 text-white hover:opacity-90 cursor-pointer disabled:opacity-50"
+                                  >
+                                    Confirm archive
+                                  </button>
+                                  <button
+                                    onClick={() => setArchiveConfirmId(null)}
+                                    className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-secondary cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </span>
+                              ) : (
+                                <button
+                                  disabled={busy}
+                                  onClick={() => setArchiveConfirmId(app.id)}
+                                  className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                                >
+                                  <Archive className="h-3 w-3" /> Send to Archive
+                                </button>
+                              )
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <button
+                            onClick={() => { setPipelineView(null); setArchiveConfirmId(null); }}
+                            className="mt-0.5 p-1.5 rounded-lg border border-border bg-card hover:bg-secondary cursor-pointer flex-shrink-0"
+                            aria-label="Back to all services"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </button>
+                          <div className="min-w-0">
+                            <h3 className="text-lg font-bold text-foreground">{isArchive ? "Archive" : pipelineView}</h3>
+                            <p className="text-xs text-muted-foreground">
+                              {isArchive
+                                ? "Clients who finished their service. Restore one to move it again."
+                                : `${apps.length} client${apps.length === 1 ? "" : "s"} on this route. Use the buttons to move a client forward or back.`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="relative sm:w-64">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <input
+                            type="text"
+                            value={pipelineSearch}
+                            onChange={(e) => setPipelineSearch(e.target.value)}
+                            placeholder="Search clients..."
+                            className="w-full pl-9 pr-3 py-2 bg-muted/20 border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+                          />
+                        </div>
+                      </div>
+
+                      {isArchive ? (
+                        apps.length === 0 ? (
+                          <p className="text-xs text-muted-foreground bg-card border border-border rounded-2xl p-8 text-center">No archived clients.</p>
+                        ) : (
+                          <div className="space-y-2">{apps.map(clientRow)}</div>
+                        )
+                      ) : (
+                        <>
+                          {/* Route steps — tap one to show only its clients */}
+                          <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+                            <button
+                              onClick={() => setPipelineStageFocus("all")}
+                              className={`flex-shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border cursor-pointer ${
+                                pipelineStageFocus === "all" ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              All · {apps.length}
+                            </button>
+                            {sections.map((stage, i) => {
+                              const count = apps.filter((a: any) => a.currentStage === stage).length;
+                              const branch = branchOf(stage);
+                              return (
+                                <button
+                                  key={stage}
+                                  onClick={() => setPipelineStageFocus(stage)}
+                                  className={`flex-shrink-0 text-[11px] font-semibold px-3 py-2 rounded-xl border cursor-pointer flex items-center gap-1.5 ${
+                                    pipelineStageFocus === stage
+                                      ? "bg-primary text-primary-foreground border-primary"
+                                      : branch === "APPROVED"
+                                        ? "bg-green-500/5 border-green-500/30 text-foreground"
+                                        : branch === "REFUSED"
+                                          ? "bg-red-500/5 border-red-500/30 text-foreground"
+                                          : "bg-card border-border text-foreground"
+                                  }`}
+                                >
+                                  {branch === "MAIN" && <span className="opacity-60">{i + 1}.</span>}
+                                  {stageLabel(stage, route)}
+                                  <span className={`px-1.5 rounded-full text-[10px] font-bold ${count > 0 ? (pipelineStageFocus === stage ? "bg-white/20" : "bg-primary/10 text-primary") : "opacity-50"}`}>{count}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {apps.length === 0 ? (
+                            <p className="text-xs text-muted-foreground bg-card border border-border rounded-2xl p-8 text-center">
+                              {search ? "No clients match your search." : "No active clients on this service."}
+                            </p>
+                          ) : (
+                            <div className="space-y-5">
+                              {sections
+                                .filter((stage) => (pipelineStageFocus === "all" ? apps.some((a: any) => a.currentStage === stage) : stage === pipelineStageFocus))
+                                .map((stage) => {
+                                  const stageApps = apps.filter((a: any) => a.currentStage === stage);
+                                  const branch = branchOf(stage);
+                                  return (
+                                    <section key={stage} className="space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="text-xs font-bold text-foreground uppercase tracking-wide">{stageLabel(stage, route)}</h4>
+                                        {branch === "APPROVED" && <span className="text-[9px] font-bold text-green-600 bg-green-500/10 px-1.5 py-0.5 rounded">Approved path</span>}
+                                        {branch === "REFUSED" && <span className="text-[9px] font-bold text-red-600 bg-red-500/10 px-1.5 py-0.5 rounded">Refused path</span>}
+                                        {!branch && <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Not on current route</span>}
+                                        <span className="text-[10px] font-bold text-muted-foreground">{stageApps.length}</span>
+                                      </div>
+                                      {stageApps.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground bg-card border border-border rounded-xl p-4">No clients at this step.</p>
+                                      ) : (
+                                        stageApps.map(clientRow)
+                                      )}
+                                    </section>
+                                  );
+                                })}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  );
+                })()
               )}
             </div>
           )}
@@ -4708,7 +5144,7 @@ export default function Home() {
                   <h3 className="text-lg font-bold text-foreground">Invoicing & Payments</h3>
                   <p className="text-xs text-muted-foreground">Track transaction history, outstanding balances, and receipt validations.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={() => {
                       resetReceiptForm();
@@ -4719,11 +5155,13 @@ export default function Home() {
                     <Receipt className="h-4 w-4" /> Generate Receipt
                   </button>
                   <button
-                    onClick={() => {
-                      setIsAddPaymentOpen(true);
-                      setAddPaymentError(null);
-                      setAddPaymentSuccess(null);
-                    }}
+                    onClick={() => openRecordPayment("OUTSTANDING")}
+                    className="bg-card border border-border text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 text-foreground hover:bg-secondary transition-all cursor-pointer"
+                  >
+                    <AlertTriangle className="h-4 w-4 text-orange-500" /> Record Outstanding
+                  </button>
+                  <button
+                    onClick={() => openRecordPayment("PAYMENT")}
                     className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer"
                   >
                     <Plus className="h-4 w-4" /> Record Payment
@@ -4737,7 +5175,7 @@ export default function Home() {
                   <div className="bg-card border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
                     <div className="p-6 border-b border-border flex justify-between items-center bg-muted/20">
                       <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
-                        <CreditCard className="h-4 w-4 text-primary" /> Record Payment
+                        <CreditCard className="h-4 w-4 text-primary" /> {newPaymentType === "OUTSTANDING" ? "Record Outstanding Balance" : "Record Payment"}
                       </h4>
                       <button
                         onClick={() => setIsAddPaymentOpen(false)}
@@ -4757,23 +5195,35 @@ export default function Home() {
                           {addPaymentSuccess}
                         </div>
                       )}
+                      <div className="grid grid-cols-2 gap-2 p-1 bg-muted/30 rounded-xl">
+                        {([
+                          { value: "PAYMENT", label: "Money received" },
+                          { value: "OUTSTANDING", label: "Money owed" },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setNewPaymentType(opt.value)}
+                            className={`text-xs font-bold py-2 rounded-lg transition-all cursor-pointer ${
+                              newPaymentType === opt.value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      {newPaymentType === "OUTSTANDING" && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Use this for money a client still owes. When the client pays, open the record and use &quot;Record a payment&quot; — part-payments reduce the balance until it is paid off.
+                        </p>
+                      )}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Client *</label>
-                        <select
-                          required
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Client Name *</label>
+                        <ClientSearchInput
+                          clients={clients.filter((c: any) => user?.role.toUpperCase() === "ADMIN" || c.assignedStaffId === user?.id)}
                           value={newPaymentClientId}
-                          onChange={(e) => { setNewPaymentClientId(e.target.value); setNewPaymentApplicationId(""); }}
-                          className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
-                        >
-                          <option value="">Select a client...</option>
-                          {clients
-                            .filter((c: any) => user?.role.toUpperCase() === "ADMIN" || c.assignedStaffId === user?.id)
-                            .map((c: any) => (
-                              <option key={c.id} value={c.id}>
-                                {c.fileNumber} — {c.firstName} {c.lastName}
-                              </option>
-                            ))}
-                        </select>
+                          onChange={(id) => { setNewPaymentClientId(id); setNewPaymentApplicationId(""); }}
+                        />
                       </div>
                       <div className="space-y-1">
                         <label className="text-[11px] font-bold text-muted-foreground uppercase">Application</label>
@@ -4849,12 +5299,12 @@ export default function Home() {
                         </select>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Notes</label>
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase">Description</label>
                         <input
                           type="text"
                           value={newPaymentNotes}
                           onChange={(e) => setNewPaymentNotes(e.target.value)}
-                          placeholder="Optional note"
+                          placeholder={newPaymentType === "OUTSTANDING" ? "e.g. Balance for UK visa processing fee" : "Optional note"}
                           className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
                         />
                       </div>
@@ -4877,7 +5327,7 @@ export default function Home() {
                         {addPaymentLoading ? (
                           <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
                         ) : (
-                          <>Record Payment</>
+                          <>{newPaymentType === "OUTSTANDING" ? "Record Outstanding" : "Record Payment"}</>
                         )}
                       </button>
                     </form>
@@ -5155,84 +5605,412 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Payments Table */}
+              {/* Payment Summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { label: "Owed by clients", statuses: ["OUTSTANDING"], tone: "text-orange-600" },
+                  { label: "Awaiting confirmation", statuses: ["PENDING"], tone: "text-yellow-600" },
+                  { label: "Confirmed received", statuses: ["CONFIRMED"], tone: "text-green-600" },
+                ].map((card) => {
+                  const totals = outstandingByCurrency(payments, card.statuses);
+                  return (
+                    <div key={card.label} className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{card.label}</p>
+                      {totals.length === 0 ? (
+                        <p className={`text-lg font-black mt-1 ${card.tone}`}>—</p>
+                      ) : (
+                        totals.map((t) => (
+                          <p key={t.currency} className={`text-lg font-black mt-1 leading-tight ${card.tone}`}>{formatAmount(t.total, t.currency)}</p>
+                        ))
+                      )}
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {payments.filter((p: any) => card.statuses.includes(p.status)).length} record(s)
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Filters */}
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                {([
+                  { value: "all", label: "All" },
+                  { value: "OUTSTANDING", label: "Outstanding" },
+                  { value: "PENDING", label: "Awaiting confirmation" },
+                  { value: "CONFIRMED", label: "Confirmed" },
+                  { value: "SETTLED", label: "Paid off" },
+                  { value: "REJECTED", label: "Rejected" },
+                ] as const).map((f) => (
+                  <button
+                    key={f.value}
+                    onClick={() => setPaymentFilter(f.value)}
+                    className={`text-[11px] font-bold px-3 py-1.5 rounded-full border whitespace-nowrap transition-all cursor-pointer ${
+                      paymentFilter === f.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card text-muted-foreground border-border hover:text-foreground"
+                    }`}
+                  >
+                    {f.label}
+                    {f.value !== "all" && (
+                      <span className="ml-1 opacity-70">({payments.filter((p: any) => p.status === f.value).length})</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Payments List */}
+              {(() => {
+                const visiblePayments = payments.filter((p: any) => paymentFilter === "all" || p.status === paymentFilter);
+                const amountCell = (p: any) => {
+                  if (p.status === "OUTSTANDING" || p.status === "SETTLED") {
+                    const original = originalOutstandingAmount(payments, p);
+                    return (
+                      <>
+                        <p className="font-semibold text-foreground">
+                          {p.status === "SETTLED" ? formatAmount(original, p.currency) : `${formatAmount(p.amount, p.currency)} owed`}
+                        </p>
+                        {p.status === "OUTSTANDING" && original > p.amount && (
+                          <p className="text-[10px] text-muted-foreground">of {formatAmount(original, p.currency)}</p>
+                        )}
+                      </>
+                    );
+                  }
+                  return <p className="font-semibold text-foreground">{formatAmount(p.amount, p.currency)}</p>;
+                };
+                const statusBadge = (p: any) => (
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${paymentStatusClass(p.status)}`}>
+                    {PAYMENT_STATUS_LABELS[p.status] || p.status}
+                  </span>
+                );
+                return (
               <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-                {paymentsLoading ? (
+                {paymentsLoading && payments.length === 0 ? (
                   <div className="py-12 flex justify-center items-center">
                     <div className="h-8 w-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
                   </div>
-                ) : payments.length === 0 ? (
-                  <div className="py-12 flex flex-col items-center justify-center text-muted-foreground">
+                ) : visiblePayments.length === 0 ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-muted-foreground px-4 text-center">
                     <CreditCard className="h-10 w-10 mb-3 opacity-40" />
-                    <p className="text-sm font-semibold">No payments recorded yet</p>
-                    <p className="text-xs mt-1">Click "Record Payment" to log the first invoice/payment.</p>
+                    <p className="text-sm font-semibold">{payments.length === 0 ? "No payments recorded yet" : "No payments match this filter"}</p>
+                    {payments.length === 0 && <p className="text-xs mt-1">Click &quot;Record Payment&quot; to log the first invoice/payment.</p>}
                   </div>
                 ) : (
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
-                        <th className="py-3.5 px-6">Invoice</th>
-                        <th className="py-3.5 px-6">Client</th>
-                        <th className="py-3.5 px-6">Amount</th>
-                        <th className="py-3.5 px-6">Method</th>
-                        <th className="py-3.5 px-6">Receipt</th>
-                        <th className="py-3.5 px-6 text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/60 text-xs">
-                      {payments.map((p: any) => (
-                        <tr key={p.id} className="hover:bg-muted/10 transition-colors">
-                          <td className="py-3.5 px-6">
-                            <p className="font-mono font-semibold text-foreground">{p.invoiceNumber}</p>
-                            <p className="text-[10px] text-muted-foreground">{p.recordedBy?.name}</p>
-                          </td>
-                          <td className="py-3.5 px-6">
-                            <p className="font-semibold text-foreground">{p.client?.firstName} {p.client?.lastName}</p>
-                            <p className="text-[10px] text-muted-foreground font-mono">{p.client?.fileNumber}</p>
-                          </td>
-                          <td className="py-3.5 px-6 font-semibold text-foreground">{formatAmount(p.amount, p.currency)}</td>
-                          <td className="py-3.5 px-6 text-muted-foreground">{p.method || "—"}</td>
-                          <td className="py-3.5 px-6">
-                            {p.receiptUrl ? (
-                              <a href={p.receiptUrl} download={p.receiptFileName || "receipt"} className="text-primary hover:underline font-semibold text-xs cursor-pointer">
-                                {p.receiptFileName || "Download"}
-                              </a>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-6 text-right">
-                            {user?.role === "ADMIN" && p.status === "PENDING" ? (
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  onClick={() => handleUpdatePaymentStatus(p.id, "CONFIRMED")}
-                                  className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer"
-                                >
-                                  ✓ Confirm
-                                </button>
-                                <button
-                                  onClick={() => handleUpdatePaymentStatus(p.id, "REJECTED")}
-                                  className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer"
-                                >
-                                  ✕ Reject
-                                </button>
+                  <>
+                    {/* Mobile: cards */}
+                    <ul className="md:hidden divide-y divide-border/60">
+                      {visiblePayments.map((p: any) => (
+                        <li key={p.id}>
+                          <button onClick={() => openPaymentDetails(p)} className="w-full text-left p-4 space-y-1.5 hover:bg-muted/10 cursor-pointer">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-foreground truncate">{p.client?.firstName} {p.client?.lastName}</p>
+                                <p className="text-[10px] text-muted-foreground font-mono">{p.invoiceNumber} · {new Date(p.createdAt).toLocaleDateString()}</p>
                               </div>
-                            ) : (
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                p.status === "CONFIRMED" ? "bg-green-500/10 text-green-600" :
-                                p.status === "REJECTED" ? "bg-red-500/10 text-red-500" :
-                                "bg-yellow-500/10 text-yellow-600"
-                              }`}>
-                                {p.status}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
+                              {statusBadge(p)}
+                            </div>
+                            <div className="text-xs">{amountCell(p)}</div>
+                            {p.notes && <p className="text-[11px] text-muted-foreground line-clamp-2">{p.notes}</p>}
+                          </button>
+                        </li>
                       ))}
-                    </tbody>
-                  </table>
+                    </ul>
+
+                    {/* Desktop: table */}
+                    <table className="hidden md:table w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
+                          <th className="py-3.5 px-6">Invoice</th>
+                          <th className="py-3.5 px-6">Client</th>
+                          <th className="py-3.5 px-6">Amount</th>
+                          <th className="py-3.5 px-6">Description</th>
+                          <th className="py-3.5 px-6 text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60 text-xs">
+                        {visiblePayments.map((p: any) => (
+                          <tr key={p.id} onClick={() => openPaymentDetails(p)} className="hover:bg-muted/10 transition-colors cursor-pointer">
+                            <td className="py-3.5 px-6">
+                              <p className="font-mono font-semibold text-foreground">{p.invoiceNumber}</p>
+                              <p className="text-[10px] text-muted-foreground">{p.recordedBy?.name} · {new Date(p.createdAt).toLocaleDateString()}</p>
+                            </td>
+                            <td className="py-3.5 px-6">
+                              <p className="font-semibold text-foreground">{p.client?.firstName} {p.client?.lastName}</p>
+                              <p className="text-[10px] text-muted-foreground font-mono">{p.client?.fileNumber}</p>
+                            </td>
+                            <td className="py-3.5 px-6">
+                              {amountCell(p)}
+                              <p className="text-[10px] text-muted-foreground">{p.method || ""}</p>
+                            </td>
+                            <td className="py-3.5 px-6 text-muted-foreground max-w-[260px]">
+                              <p className="truncate">{p.notes || "—"}</p>
+                            </td>
+                            <td className="py-3.5 px-6 text-right">{statusBadge(p)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
                 )}
               </div>
+                );
+              })()}
+
+              {/* Payment Details Modal */}
+              {selectedPayment && (() => {
+                const p = selectedPayment;
+                const isAdminUser = user?.role.toUpperCase() === "ADMIN";
+                const isBalance = p.status === "OUTSTANDING" || p.status === "SETTLED";
+                const towards = isBalance ? paymentsTowards(payments, p) : [];
+                const original = isBalance ? originalOutstandingAmount(payments, p) : p.amount;
+                const towardsInvoice = p.notes?.startsWith("Payment towards ") ? p.notes.slice("Payment towards ".length).split(" ")[0] : null;
+                const parentBalance = towardsInvoice ? payments.find((x: any) => x.invoiceNumber === towardsInvoice) : null;
+                const fieldCls = "w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground";
+                return (
+                <div
+                  className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150"
+                  onClick={() => setSelectedPayment(null)}
+                >
+                  <div
+                    className="bg-card border border-border w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-5 py-4 border-b border-border flex justify-between items-center bg-muted/20 flex-shrink-0">
+                      <h4 className="font-bold text-foreground text-sm flex items-center gap-2 min-w-0">
+                        <Receipt className="h-4 w-4 text-primary flex-shrink-0" />
+                        <span className="truncate">{isBalance ? "Outstanding Balance" : "Payment"} · {p.invoiceNumber}</span>
+                      </h4>
+                      <button
+                        onClick={() => setSelectedPayment(null)}
+                        className="text-muted-foreground hover:text-foreground font-semibold text-xs border border-border rounded-lg px-2 py-1 bg-card hover:bg-secondary cursor-pointer flex-shrink-0"
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <div className="p-5 space-y-4 overflow-y-auto text-xs">
+                      {paymentActionError && (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 font-semibold text-destructive">
+                          {paymentActionError}
+                        </div>
+                      )}
+
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          {isBalance ? (
+                            <>
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase">{p.status === "SETTLED" ? "Total paid" : "Still owed"}</p>
+                              <p className="text-2xl font-black text-foreground">{formatAmount(p.status === "SETTLED" ? original : p.amount, p.currency)}</p>
+                              {p.status === "OUTSTANDING" && original > p.amount && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  {formatAmount(original - p.amount, p.currency)} paid of {formatAmount(original, p.currency)}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-2xl font-black text-foreground">{formatAmount(p.amount, p.currency)}</p>
+                          )}
+                        </div>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${paymentStatusClass(p.status)}`}>
+                          {PAYMENT_STATUS_LABELS[p.status] || p.status}
+                        </span>
+                      </div>
+
+                      {editOutstanding ? (
+                        <div className="space-y-3 bg-muted/10 border border-border rounded-xl p-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase">Amount still owed ({p.currency})</label>
+                            <input type="number" min="0" step="0.01" value={editOutstanding.amount} onChange={(e) => setEditOutstanding({ ...editOutstanding, amount: e.target.value })} className={fieldCls} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase">Description</label>
+                            <textarea rows={2} value={editOutstanding.notes} onChange={(e) => setEditOutstanding({ ...editOutstanding, notes: e.target.value })} className={`${fieldCls} resize-none`} />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setEditOutstanding(null)} className="text-xs font-bold py-2 rounded-xl border border-border bg-card hover:bg-secondary cursor-pointer">Cancel</button>
+                            <button onClick={() => handleSaveOutstandingEdit(p)} className="text-xs font-bold py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90 cursor-pointer">Save Changes</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase">Description</p>
+                          <p className="text-foreground mt-1 whitespace-pre-wrap break-words">{p.notes || "No description provided."}</p>
+                          {parentBalance && (
+                            <button onClick={() => openPaymentDetails(parentBalance)} className="text-primary font-semibold hover:underline mt-1 cursor-pointer">
+                              View outstanding balance {parentBalance.invoiceNumber} →
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase">Client</p>
+                          <p className="text-foreground mt-0.5 truncate">{p.client?.firstName} {p.client?.lastName}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono">{p.client?.fileNumber}</p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase">Application</p>
+                          <p className="text-foreground mt-0.5 truncate">{p.application?.serviceType || "Client-level"}</p>
+                        </div>
+                        {!isBalance && (
+                          <div>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase">Method</p>
+                            <p className="text-foreground mt-0.5">{p.method || "—"}</p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase">Recorded</p>
+                          <p className="text-foreground mt-0.5">{new Date(p.createdAt).toLocaleString()}</p>
+                          <p className="text-[10px] text-muted-foreground">by {p.recordedBy?.name || "—"}</p>
+                        </div>
+                        {p.confirmedBy && (
+                          <div>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase">
+                              {p.status === "REJECTED" ? "Rejected by" : "Confirmed by"}
+                            </p>
+                            <p className="text-foreground mt-0.5">{p.confirmedBy.name}</p>
+                          </div>
+                        )}
+                        {p.receiptUrl && (
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase">Receipt</p>
+                            <a href={p.receiptUrl} download={p.receiptFileName || "receipt"} className="text-primary hover:underline font-semibold mt-0.5 inline-block truncate max-w-full">
+                              {p.receiptFileName || "Download"}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Payments made towards this balance */}
+                      {isBalance && (
+                        <div className="pt-3 border-t border-border">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Payments made</p>
+                          {towards.length === 0 ? (
+                            <p className="text-muted-foreground">No payments yet.</p>
+                          ) : (
+                            <ul className="space-y-1.5">
+                              {towards.map((t: any) => (
+                                <li key={t.id}>
+                                  <button onClick={() => openPaymentDetails(t)} className="w-full flex items-center justify-between gap-2 bg-muted/20 hover:bg-muted/40 rounded-lg px-3 py-2 cursor-pointer text-left">
+                                    <span className="min-w-0">
+                                      <span className="font-semibold text-foreground">{formatAmount(t.amount, t.currency)}</span>
+                                      <span className="text-[10px] text-muted-foreground ml-2">{new Date(t.createdAt).toLocaleDateString()} · {t.method || "—"}</span>
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap ${paymentStatusClass(t.status)}`}>
+                                      {PAYMENT_STATUS_LABELS[t.status] || t.status}
+                                    </span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Client pays (part of) the balance */}
+                      {p.status === "OUTSTANDING" && !editOutstanding && (
+                        <div className="pt-3 border-t border-border space-y-3">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase">Record a payment</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-semibold text-muted-foreground">Amount paid ({p.currency})</label>
+                              <input type="number" min="0" step="0.01" max={p.amount} value={payOffAmount} onChange={(e) => setPayOffAmount(e.target.value)} className={fieldCls} />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-semibold text-muted-foreground">Method</label>
+                              <select value={payOffMethod} onChange={(e) => setPayOffMethod(e.target.value)} className={fieldCls}>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Card">Card</option>
+                                <option value="Other">Other</option>
+                              </select>
+                            </div>
+                          </div>
+                          <input type="text" value={payOffNote} onChange={(e) => setPayOffNote(e.target.value)} placeholder="Note (optional)" className={fieldCls} />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPayOffAmount(String(p.amount))}
+                              className="text-[11px] font-bold px-3 py-2 rounded-xl border border-border bg-card hover:bg-secondary cursor-pointer whitespace-nowrap"
+                            >
+                              Full amount
+                            </button>
+                            <button
+                              disabled={payOffLoading}
+                              onClick={() => handlePayTowardsOutstanding(p)}
+                              className="flex-1 text-xs font-bold py-2 rounded-xl bg-green-600 text-white hover:opacity-90 cursor-pointer disabled:opacity-50"
+                            >
+                              {payOffLoading ? "Saving…" : Number(payOffAmount) >= p.amount ? "✓ Record & Mark Paid Off" : "✓ Record Part-Payment"}
+                            </button>
+                          </div>
+                          {!isAdminUser && (
+                            <p className="text-[10px] text-muted-foreground">The payment will await admin confirmation; the balance is reduced straight away.</p>
+                          )}
+                        </div>
+                      )}
+
+                      {isAdminUser && !editOutstanding && (
+                        <div className="pt-3 border-t border-border space-y-2">
+                          {p.status === "PENDING" && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                onClick={() => handleUpdatePaymentStatus(p.id, "CONFIRMED")}
+                                className="text-xs font-bold py-2 rounded-xl bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer"
+                              >
+                                ✓ Confirm
+                              </button>
+                              <button
+                                onClick={() => handleUpdatePaymentStatus(p.id, "REJECTED")}
+                                className="text-xs font-bold py-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer"
+                              >
+                                ✕ Reject
+                              </button>
+                            </div>
+                          )}
+                          {p.status === "OUTSTANDING" && (
+                            <button
+                              onClick={() => setEditOutstanding({ amount: String(p.amount), notes: p.notes || "" })}
+                              className="w-full text-xs font-bold py-2 rounded-xl border border-border bg-card hover:bg-secondary flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <Edit className="h-3.5 w-3.5" /> Edit Balance
+                            </button>
+                          )}
+                          {!confirmDeletePayment ? (
+                            <button
+                              onClick={() => setConfirmDeletePayment(true)}
+                              className="w-full text-xs font-bold py-2 rounded-xl border border-red-500/30 text-red-500 hover:bg-red-500/10 flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                            </button>
+                          ) : (
+                            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-3 space-y-2">
+                              <p className="text-xs font-semibold text-foreground">
+                                Delete {p.invoiceNumber}? This cannot be undone.
+                                {towardsInvoice && p.status !== "REJECTED" && " The amount will be added back to the outstanding balance."}
+                              </p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  onClick={() => setConfirmDeletePayment(false)}
+                                  className="text-xs font-bold py-2 rounded-xl border border-border bg-card hover:bg-secondary cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  disabled={deletePaymentLoading}
+                                  onClick={() => handleDeletePayment(p.id)}
+                                  className="text-xs font-bold py-2 rounded-xl bg-red-500 text-white hover:opacity-90 cursor-pointer disabled:opacity-50"
+                                >
+                                  {deletePaymentLoading ? "Deleting…" : "Yes, Delete"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                );
+              })()}
             </div>
           )}
 
@@ -5560,13 +6338,13 @@ export default function Home() {
               )}
 
               {/* Staff List Table */}
-              <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+              <div className="bg-card border border-border rounded-2xl overflow-x-auto shadow-sm">
                 {staffLoading ? (
                   <div className="py-12 flex justify-center items-center">
                     <div className="h-8 w-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 ) : (
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-collapse min-w-[640px]">
                     <thead>
                       <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
                         <th className="py-3.5 px-6">Staff Member</th>
