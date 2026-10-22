@@ -161,7 +161,7 @@ interface StaffRangeSummary {
   staffName: string;
   department: string;
   position: string;
-  totalClients: number;
+  totalClients: number; // client visits (a returning client counts once per day)
   totalVisas: number;
   totalFlights: number;
   totalHotels: number;
@@ -296,7 +296,7 @@ async function generateWeeklyPDF(
   const summaryItems = [
     ["Days Reported", String(staffSummary.daysReported)],
     ["Days Reviewed", String(staffSummary.reviewedDays)],
-    ["Clients Attended", String(staffSummary.totalClients)],
+    ["Client Visits", String(staffSummary.totalClients)],
     ["Visa Applications", String(staffSummary.totalVisas)],
     ["Flight Bookings", String(staffSummary.totalFlights)],
     ["Hotel Reservations", String(staffSummary.totalHotels)],
@@ -525,6 +525,33 @@ function saveDepartment(dept: string, userId?: number) {
       localStorage.setItem("waypoint_department", dept);
     } catch {}
   }
+}
+
+// Unsaved report text is kept in the browser when a draft save fails (e.g. the session
+// expired), so the staff member can sign back in without retyping their report.
+function draftBackupKey(userId: number, date: string) {
+  return `waypoint_report_backup_${userId}_${date}`;
+}
+
+function saveDraftBackup(userId: number, date: string, data: DailyReport) {
+  try {
+    localStorage.setItem(draftBackupKey(userId, date), JSON.stringify(data));
+  } catch {}
+}
+
+function readDraftBackup(userId: number, date: string): DailyReport | null {
+  try {
+    const raw = localStorage.getItem(draftBackupKey(userId, date));
+    return raw ? (JSON.parse(raw) as DailyReport) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraftBackup(userId: number, date: string) {
+  try {
+    localStorage.removeItem(draftBackupKey(userId, date));
+  } catch {}
 }
 
 async function apiFetchTodayReport(
@@ -941,9 +968,7 @@ function AdminReportsOverview({ user }: { user: any }) {
   const pendingReviewCount = reports.filter((r) => r.status === "SUBMITTED").length;
   const reviewedCount = reports.filter((r) => r.status === "REVIEWED").length;
 
-  const totalClients = reports.reduce((acc, r) => acc + (parseInt(r.clientsAttended || "0", 10) || 0), 0);
   const totalVisas = reports.reduce((acc, r) => acc + (parseInt(r.visaApplications || "0", 10) || 0), 0);
-  const totalCalls = reports.reduce((acc, r) => acc + (parseInt(r.customerCalls || "0", 10) || 0), 0);
   const totalRevenue = reports.reduce((acc, r) => {
     const num = parseFloat((r.paymentsReceived || "0").replace(/[^0-9.]/g, ""));
     return acc + (isNaN(num) ? 0 : num);
@@ -1334,7 +1359,7 @@ function AdminReportsOverview({ user }: { user: any }) {
       {period === "daily" && (
         <>
           {/* Daily KPI Summary Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Reports Logged</p>
@@ -1349,14 +1374,6 @@ function AdminReportsOverview({ user }: { user: any }) {
                 )}
                 <span className="text-muted-foreground">· {reviewedCount} approved</span>
               </div>
-            </div>
-            <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Clients Attended</p>
-                <Users className="h-4 w-4 text-primary" />
-              </div>
-              <p className="text-2xl font-black text-foreground mt-2">{totalClients}</p>
-              <p className="text-[10px] text-muted-foreground mt-1">{totalCalls} customer calls logged</p>
             </div>
             <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between">
@@ -1511,7 +1528,7 @@ function AdminReportsOverview({ user }: { user: any }) {
                     {/* Stats grid */}
                     <div className="grid grid-cols-2 gap-2 text-[10px]">
                       {[
-                        { label: "Clients",  value: s.totalClients },
+                        { label: "Client visits",  value: s.totalClients },
                         { label: "Visas",    value: s.totalVisas },
                         { label: "Flights",  value: s.totalFlights },
                         { label: "Calls",    value: s.totalCalls },
@@ -1631,7 +1648,7 @@ function AdminReportsOverview({ user }: { user: any }) {
                     <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
                       <th className="py-3 px-4">Staff Member</th>
                       <th className="py-3 px-3 text-center">Days</th>
-                      <th className="py-3 px-3 text-center">Clients</th>
+                      <th className="py-3 px-3 text-center" title="Each day's Clients Attended added up; a returning client counts once per day">Client Visits</th>
                       <th className="py-3 px-3 text-center">Visas</th>
                       <th className="py-3 px-3 text-center">Flights</th>
                       <th className="py-3 px-3 text-center">Calls</th>
@@ -1731,7 +1748,7 @@ function AdminReportsOverview({ user }: { user: any }) {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {[
                   { label: "Total Reports", value: yearSummaries.reduce((a,s) => a + s.daysReported, 0), icon: ClipboardCheck, color: "text-primary" },
-                  { label: "Total Clients", value: yearSummaries.reduce((a,s) => a + s.totalClients, 0), icon: Users, color: "text-sky-500" },
+                  { label: "Client Visits", value: yearSummaries.reduce((a,s) => a + s.totalClients, 0), icon: Users, color: "text-sky-500" },
                   { label: "Total Visas", value: yearSummaries.reduce((a,s) => a + s.totalVisas, 0), icon: CheckCircle2, color: "text-emerald-500" },
                   { label: "Total Revenue", value: `₦${yearSummaries.reduce((a,s) => a + s.totalRevenue, 0).toLocaleString()}`, icon: BarChart2, color: "text-amber-500" },
                 ].map(({ label, value, icon: Icon, color }) => (
@@ -1757,7 +1774,7 @@ function AdminReportsOverview({ user }: { user: any }) {
                       <tr className="border-b border-border bg-muted/25 text-muted-foreground text-[10px] font-bold uppercase tracking-wider">
                         <th className="py-3 px-4">Staff Member</th>
                         <th className="py-3 px-3 text-center">Days</th>
-                        <th className="py-3 px-3 text-center">Clients</th>
+                        <th className="py-3 px-3 text-center" title="Each day's Clients Attended added up; a returning client counts once per day">Client Visits</th>
                         <th className="py-3 px-3 text-center">Visas</th>
                         <th className="py-3 px-3 text-center">Flights</th>
                         <th className="py-3 px-3 text-center">Calls</th>
@@ -2297,6 +2314,8 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
   const [sampleBusy, setSampleBusy] = useState(false);
   const [sampleToast, setSampleToast] = useState<string | null>(null);
   const [sampleToDelete, setSampleToDelete] = useState<ReportSample | null>(null);
+  // Errors from sample actions are shown inside the sample dialogs, where the staff member is looking.
+  const [sampleError, setSampleError] = useState<string | null>(null);
   // When set, the form is being used to create/edit a sample instead of today's report.
   const [editingSample, setEditingSample] = useState<{ id?: number; name: string } | null>(null);
   const [stashedForm, setStashedForm] = useState<DailyReport | null>(null);
@@ -2317,7 +2336,14 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
           if (latestDepartment) {
             saveDepartment(latestDepartment, user.id);
           }
-          if (existing) {
+          // Restore text that failed to save last time; the auto-save then sends it to the server.
+          const backup = readDraftBackup(user.id, todayStr());
+          if (backup && (!existing || existing.status === "DRAFT")) {
+            const base = existing ? normalizeReport(existing, user, todayStr()) : blankReport(user, todayStr());
+            lastSavedRef.current = JSON.stringify(base);
+            if (existing) setTodayReport(base);
+            setForm(normalizeReport({ ...base, ...backup }, user, todayStr()));
+          } else if (existing) {
             if (existing.department) {
               saveDepartment(existing.department, user.id);
             }
@@ -2376,8 +2402,25 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
   async function loadSamples() {
     setSamplesLoading(true);
     const res = await apiSampleRequest("/api/daily-report-samples", "GET");
-    if (res.samples) setSamples(res.samples);
+    if (res.samples) {
+      setSamples(res.samples);
+      setSampleError(null);
+    } else {
+      setSampleError(res.error || "Couldn't load your samples.");
+    }
     setSamplesLoading(false);
+  }
+
+  function openUseSample() {
+    setSampleError(null);
+    setSampleModal("use");
+    loadSamples();
+  }
+
+  function openSaveSample() {
+    setSampleError(null);
+    setSampleName("");
+    setSampleModal("save");
   }
 
   useEffect(() => {
@@ -2392,10 +2435,13 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
   // Fill today's report with a sample's content, keeping the report's date, status and review info.
   function applySample(sample: ReportSample) {
     const base = submitDone && todayReport ? todayReport : form;
-    setForm(normalizeReport({ ...base, ...sample.data }, user, todayStr()));
+    const data = (sample.data && typeof sample.data === "object" ? sample.data : {}) as Partial<DailyReport>;
+    setForm(normalizeReport({ ...base, ...data, date: base.date, id: base.id, staffId: base.staffId }, user, todayStr()));
     setSubmitDone(false);
     setSampleModal(null);
+    setSampleError(null);
     setStaffView("today");
+    window.scrollTo({ top: 0, behavior: "smooth" });
     flashSampleToast(`Sample "${sample.name}" applied. Review the details, then save or submit.`);
   }
 
@@ -2403,6 +2449,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
     const name = sampleName.trim();
     if (!name) return;
     setSampleBusy(true);
+    setSampleError(null);
     const res = await apiSampleRequest("/api/daily-report-samples", "POST", { name, data: form });
     setSampleBusy(false);
     if (res.sample) {
@@ -2412,8 +2459,8 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       setSampleName("");
       flashSampleToast(`Saved as sample "${saved.name}". Find it under My Samples.`);
     } else {
-      setErrorMessage(res.error || "Failed to save sample.");
-      setSampleModal(null);
+      // Keep the dialog open so the error is visible and the staff member can retry.
+      setSampleError(res.error || "Failed to save sample. Please try again.");
     }
   }
 
@@ -2461,11 +2508,11 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
     const res = await apiSampleRequest(`/api/daily-report-samples/${target.id}`, "DELETE");
     setSampleBusy(false);
     if (res.error) {
-      setErrorMessage(res.error);
-    } else {
-      setSamples((prev) => prev.filter((x) => x.id !== target.id));
-      flashSampleToast(`Sample "${target.name}" deleted.`);
+      setSampleError(res.error);
+      return;
     }
+    setSamples((prev) => prev.filter((x) => x.id !== target.id));
+    flashSampleToast(`Sample "${target.name}" deleted.`);
     setSampleToDelete(null);
   }
 
@@ -2484,9 +2531,11 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       if (gen !== saveGenRef.current) return;
       if (res.report) {
         lastSavedRef.current = snapshot;
+        if (user?.id) clearDraftBackup(user.id, todayStr());
         setTodayReport(normalizeReport(res.report, user, todayStr()));
         setAutoSave({ state: "saved", at: nowTime() });
       } else {
+        if (user?.id) saveDraftBackup(user.id, todayStr(), form);
         setAutoSave({ state: "error" });
       }
     }, 1500);
@@ -2516,6 +2565,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
       if (res.report) {
         const normalized = normalizeReport(res.report, user, todayStr());
         lastSavedRef.current = JSON.stringify(normalized);
+        if (user?.id) clearDraftBackup(user.id, todayStr());
         setTodayReport(normalized);
         setForm(normalized);
         setSubmitDone(true);
@@ -2546,6 +2596,12 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
   const btnPrimary = "text-xs font-bold px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5";
   const btnGhost = "text-xs font-semibold px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer flex items-center gap-1.5";
 
+  const sampleErrorEl = sampleError && (
+    <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3 text-xs font-semibold text-destructive">
+      {sampleError}
+    </div>
+  );
+
   const sampleModals = (
     <>
       {sampleModal === "save" && (
@@ -2563,6 +2619,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
                 Saves what you have filled in so you can reuse it for future reports. Today&apos;s report is not affected.
               </p>
             </div>
+            {sampleErrorEl}
             <div className="space-y-1">
               <label className={labelCls}>Sample Name</label>
               <input
@@ -2596,7 +2653,16 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
                 The sample&apos;s details will replace what is currently in the form. You can still edit everything before submitting.
               </p>
             </div>
-            {samples.length === 0 ? (
+            {sampleErrorEl}
+            {samplesLoading && samples.length === 0 ? (
+              <div className="flex justify-center py-6">
+                <span className="h-6 w-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              </div>
+            ) : sampleError && samples.length === 0 ? (
+              <div className="flex justify-center">
+                <button type="button" onClick={loadSamples} className={btnSecondary}>Try again</button>
+              </div>
+            ) : samples.length === 0 ? (
               <p className="text-xs text-muted-foreground py-4 text-center">
                 You have no samples yet. Fill in the form and click <b>Save as Sample</b> to create one.
               </p>
@@ -2647,8 +2713,9 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
             <p className="text-xs text-muted-foreground">
               &quot;{sampleToDelete.name}&quot; will be permanently deleted. Reports you already filled from it are not affected.
             </p>
+            {sampleErrorEl}
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setSampleToDelete(null)} disabled={sampleBusy} className={btnSecondary}>
+              <button type="button" onClick={() => { setSampleToDelete(null); setSampleError(null); }} disabled={sampleBusy} className={btnSecondary}>
                 Cancel
               </button>
               <button
@@ -2718,10 +2785,10 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
           </button>
         </div>
 
-        {errorMessage && (
+        {(errorMessage || (sampleError && !sampleModal && !sampleToDelete)) && (
           <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>{errorMessage}</span>
+            <span>{errorMessage || sampleError}</span>
           </div>
         )}
 
@@ -2873,15 +2940,12 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
         </div>
         {!editingSample && (
           <div className="flex items-center gap-1">
-            <button type="button" onClick={() => setSampleModal("use")} className={btnGhost}>
+            <button type="button" onClick={openUseSample} className={btnGhost}>
               <Copy className="h-3.5 w-3.5" /> Use sample
             </button>
             <button
               type="button"
-              onClick={() => {
-                setSampleName("");
-                setSampleModal("save");
-              }}
+              onClick={openSaveSample}
               className={btnGhost}
             >
               <BookmarkPlus className="h-3.5 w-3.5" /> Save as sample
@@ -3070,7 +3134,10 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
 
       {/* SECTION C */}
       <Sec letter="C" title="Sales & Client Performance" icon={BarChart2} isOpen={expandedSections.C} onToggle={() => toggleSection("C")}>
-        <p className="text-[10px] text-muted-foreground mb-3">Include both CRM-tracked and offline/external activities (digits only)</p>
+        <p className="text-[10px] text-muted-foreground mb-1">Include both CRM-tracked and offline/external activities (digits only)</p>
+        <p className="text-[10px] text-muted-foreground mb-3">
+          <b>Clients Attended To</b> is everyone you served today, new or returning. Count brand-new clients under <b>New Leads</b>.
+        </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: "Clients Attended To", key: "clientsAttended" },

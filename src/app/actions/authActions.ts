@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { SESSION_COOKIE_OPTIONS } from "@/lib/auth";
 
 const isSupabaseConfigured = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,12 +33,7 @@ export async function signInAction(email: string, password: string) {
         return { error: "User authenticated in Supabase but not found in local database." };
       }
 
-      cookieStore.set("mock-auth-user", email, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-      });
+      cookieStore.set("mock-auth-user", email, SESSION_COOKIE_OPTIONS);
 
       return { user: dbUser };
     } else {
@@ -53,12 +49,7 @@ export async function signInAction(email: string, password: string) {
         return { error: "Invalid password." };
       }
 
-      cookieStore.set("mock-auth-user", email, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-      });
+      cookieStore.set("mock-auth-user", email, SESSION_COOKIE_OPTIONS);
 
       return { user: dbUser };
     }

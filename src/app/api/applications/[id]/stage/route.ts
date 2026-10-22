@@ -97,6 +97,13 @@ export async function POST(
       );
     }
 
+    if (application.status === "ARCHIVED") {
+      return NextResponse.json(
+        { error: "This application is archived. Restore it from the archive before moving it." },
+        { status: 400 }
+      );
+    }
+
     const fromStage = application.currentStage as WorkflowStage;
     const route = routeForApplication(application);
 
@@ -165,7 +172,7 @@ export async function POST(
           ...(decisionStatus !== undefined ? { decisionStatus: decisionStatus || null } : {}),
         },
         include: {
-          client: { select: { id: true, fileNumber: true, firstName: true, lastName: true } },
+          client: { select: { id: true, fileNumber: true, firstName: true, lastName: true, assignedStaffId: true } },
           assignedStaff: { select: { id: true, name: true, email: true } },
         },
       }),

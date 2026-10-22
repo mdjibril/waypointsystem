@@ -38,6 +38,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // If the server no longer recognises the session (e.g. the cookie was cleared while the
+  // user was still stored locally), every API call fails with 401. Sign out locally so the
+  // login screen appears instead of the app silently failing to save.
+  React.useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (input, init) => {
+      const res = await originalFetch(input, init);
+      if (res.status === 401) {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        const { origin, pathname } = new URL(url, window.location.href);
+        if (origin === window.location.origin && pathname.startsWith("/api/") && pathname !== "/api/auth/login") {
+          setUser(null);
+          localStorage.removeItem("waypoint_user");
+          setLoginError("Your session has expired. Please sign in again.");
+        }
+      }
+      return res;
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
   const login = async (email: string, password: string): Promise<boolean> => {
     setLoginError(null);
 
