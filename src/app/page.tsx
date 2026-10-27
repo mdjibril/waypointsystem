@@ -55,7 +55,7 @@ import { ServiceRoadmap } from "@/components/ServiceRoadmap";
 import { ServiceWorkflowEditor } from "@/components/ServiceWorkflowEditor";
 import { CURRENCY_PRESETS, formatAmount } from "@/lib/currency";
 import { amountToWords } from "@/lib/numberToWords";
-import { canTransitionApplication as canTransitionApplicationRule } from "@/lib/permissions";
+import { canTransitionApplication as canTransitionApplicationRule, canManagePayments, hasAllClientAccess, ROLES, ROLE_LABELS, Role } from "@/lib/permissions";
 import { WorkflowStage } from "@/types";
 import { downloadReceiptPdf } from "@/lib/receiptPdf";
 
@@ -209,7 +209,7 @@ export default function Home() {
   const [newStaffName, setNewStaffName] = useState("");
   const [newStaffEmail, setNewStaffEmail] = useState("");
   const [newStaffPhone, setNewStaffPhone] = useState("");
-  const [newStaffRole, setNewStaffRole] = useState<"ADMIN" | "STAFF">("STAFF");
+  const [newStaffRole, setNewStaffRole] = useState<Role>("STAFF");
   const [addStaffError, setAddStaffError] = useState<string | null>(null);
   const [addStaffSuccess, setAddStaffSuccess] = useState<string | null>(null);
   const [addStaffLoading, setAddStaffLoading] = useState(false);
@@ -1201,8 +1201,7 @@ export default function Home() {
     }
   };
 
-  const handleToggleRole = async (userId: number, currentRole: string) => {
-    const nextRole = currentRole.toUpperCase() === "ADMIN" ? "STAFF" : "ADMIN";
+  const handleChangeRole = async (userId: number, nextRole: Role) => {
     try {
       const res = await fetch("/api/staff", {
         method: "PATCH",
@@ -1211,9 +1210,12 @@ export default function Home() {
       });
       if (res.ok) {
         fetchStaff();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to change role.");
       }
     } catch (err) {
-      console.error("Failed to toggle role:", err);
+      console.error("Failed to change role:", err);
     }
   };
 
@@ -2009,7 +2011,7 @@ export default function Home() {
                 <div>
                   <h3 className="text-lg md:text-xl font-extrabold text-foreground">Welcome back, {user?.name}!</h3>
                   <p className="text-xs text-muted-foreground">
-                    {user?.role === "ADMIN" ? "Full platform overview and performance metrics." : "Your assigned clients and tasks at a glance."}
+                    {user?.role === "ADMIN" ? "Full platform overview and performance metrics." : user?.role === "MANAGER" ? "All clients, pipeline and payments at a glance." : "Your assigned clients and tasks at a glance."}
                   </p>
                 </div>
                 <button onClick={() => setCurrentTab("clients")} className="bg-primary text-primary-foreground text-xs font-bold px-4 py-2.5 rounded-xl shadow-md shadow-primary/10 flex items-center gap-2 hover:opacity-90 transition-all cursor-pointer">
@@ -4223,7 +4225,7 @@ export default function Home() {
                             </button>
                           )
                         ) : !canMove ? (
-                          <span className="text-[10px] text-muted-foreground">Only admins and the assigned staff member can move this client</span>
+                          <span className="text-[10px] text-muted-foreground">Only admins, managers and the assigned staff member can move this client</span>
                         ) : (
                           <div className="flex flex-wrap gap-1.5">
                             {back.map((st) => (
@@ -5220,7 +5222,7 @@ export default function Home() {
                       <div className="space-y-1">
                         <label className="text-[11px] font-bold text-muted-foreground uppercase">Client Name *</label>
                         <ClientSearchInput
-                          clients={clients.filter((c: any) => user?.role.toUpperCase() === "ADMIN" || c.assignedStaffId === user?.id)}
+                          clients={clients.filter((c: any) => hasAllClientAccess(user?.role || "") || c.assignedStaffId === user?.id)}
                           value={newPaymentClientId}
                           onChange={(id) => { setNewPaymentClientId(id); setNewPaymentApplicationId(""); }}
                         />
@@ -5758,7 +5760,7 @@ export default function Home() {
               {/* Payment Details Modal */}
               {selectedPayment && (() => {
                 const p = selectedPayment;
-                const isAdminUser = user?.role.toUpperCase() === "ADMIN";
+                const isAdminUser = canManagePayments(user?.role || "");
                 const isBalance = p.status === "OUTSTANDING" || p.status === "SETTLED";
                 const towards = isBalance ? paymentsTowards(payments, p) : [];
                 const original = isBalance ? originalOutstandingAmount(payments, p) : p.amount;
@@ -6316,7 +6318,8 @@ export default function Home() {
                           onChange={(e) => setNewStaffRole(e.target.value as any)}
                           className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
                         >
-                          <option value="STAFF">Staff (Standard Access)</option>
+                          <option value="STAFF">Staff (Assigned clients only)</option>
+                          <option value="MANAGER">Manager (All clients, payments &amp; daily report review)</option>
                           <option value="ADMIN">Admin (Full System Access)</option>
                         </select>
                       </div>
@@ -6376,13 +6379,28 @@ export default function Home() {
                               </div>
                             </td>
                             <td className="py-3.5 px-6">
-                              <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${
-                                member.role.toLowerCase() === "admin" 
-                                  ? "bg-purple-500/10 text-purple-600 border border-purple-500/20" 
-                                  : "bg-blue-500/10 text-blue-600 border border-blue-500/20"
-                              }`}>
-                                {member.role}
-                              </span>
+                              {member.id === user?.id ? (
+                                <span className="inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-purple-500/10 text-purple-600 border border-purple-500/20">
+                                  {ROLE_LABELS[member.role.toUpperCase() as Role] || member.role} (you)
+                                </span>
+                              ) : (
+                                <select
+                                  value={member.role.toUpperCase()}
+                                  onChange={(e) => handleChangeRole(member.id, e.target.value as Role)}
+                                  aria-label={`Role for ${member.name}`}
+                                  className={`text-[10px] font-extrabold uppercase tracking-wider rounded-lg px-2 py-1 border cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary ${
+                                    member.role.toUpperCase() === "ADMIN"
+                                      ? "bg-purple-500/10 text-purple-600 border-purple-500/20"
+                                      : member.role.toUpperCase() === "MANAGER"
+                                        ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                                        : "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                                  }`}
+                                >
+                                  {ROLES.map((r) => (
+                                    <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                                  ))}
+                                </select>
+                              )}
                             </td>
                             <td className="py-3.5 px-6 text-muted-foreground font-medium">{member.phone || "—"}</td>
                             <td className="py-3.5 px-6">
@@ -6395,12 +6413,6 @@ export default function Home() {
                               </span>
                             </td>
                             <td className="py-3.5 px-6 text-right space-x-2">
-                              <button 
-                                onClick={() => handleToggleRole(member.id, member.role)}
-                                className="text-[10px] bg-muted hover:bg-secondary font-bold px-2 py-1 rounded-lg border border-border text-foreground transition-all cursor-pointer"
-                              >
-                                Toggle Role
-                              </button>
                               <button 
                                 onClick={() => handleToggleStatus(member.id, member.status)}
                                 className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-all cursor-pointer ${

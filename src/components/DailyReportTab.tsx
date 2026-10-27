@@ -759,7 +759,10 @@ function SectionHeader({
 
 type AdminPeriod = "daily" | "weekly" | "monthly" | "yearly";
 
+// The team's reports: used by admins, and by managers under their "Team Reports" tab.
+// Managers can review (comment on) reports but not their own, and cannot delete reports.
 function AdminReportsOverview({ user }: { user: any }) {
+  const canDeleteReports = user?.role?.toUpperCase() === "ADMIN";
   const now = new Date();
   const currentMonthName = now.toLocaleDateString("en-US", { month: "long" });
   const currentMonthNum = now.getMonth() + 1;
@@ -818,8 +821,8 @@ function AdminReportsOverview({ user }: { user: any }) {
     setError(null);
     try {
       const url = date
-        ? `/api/daily-reports?date=${date}`
-        : `/api/daily-reports?all=true`;
+        ? `/api/daily-reports?date=${date}&scope=team`
+        : `/api/daily-reports?all=true&scope=team`;
       const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
@@ -1085,8 +1088,8 @@ function AdminReportsOverview({ user }: { user: any }) {
           onBack={() => { setSelected(null); reloadCurrentView(); }}
           saving={saving}
           saved={saved}
-          isAdmin
-          onDelete={() => setReportToDelete(selected)}
+          isAdmin={selected.staffId !== user?.id}
+          onDelete={canDeleteReports ? () => setReportToDelete(selected) : undefined}
         />
         {deleteConfirmModal}
         {reviewSuccessModal}
@@ -1265,10 +1268,12 @@ function AdminReportsOverview({ user }: { user: any }) {
                             <Eye className="h-3 w-3" />
                             {r.status === "SUBMITTED" ? "Review" : "View"}
                           </button>
+                          {canDeleteReports && (
                           <button type="button" title="Delete" onClick={() => setReportToDelete(r)}
                             className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1293,10 +1298,12 @@ function AdminReportsOverview({ user }: { user: any }) {
                     : r.status === "SUBMITTED" ? "bg-primary/10 text-primary"
                     : "bg-muted text-muted-foreground"
                   }`}>{r.status === "SUBMITTED" ? "Needs Review" : r.status}</span>
+                  {canDeleteReports && (
                   <button type="button" title="Delete" onClick={(e) => { e.stopPropagation(); setReportToDelete(r); }}
                     className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
+                  )}
                 </div>
               </div>
               <p className="text-sm font-bold text-foreground">{r.staffName}</p>
@@ -2306,7 +2313,9 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
   // Bumped on submit so a slower in-flight auto-save can't overwrite the submitted state.
   const saveGenRef = useRef(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [staffView, setStaffView] = useState<"today" | "history" | "samples">("today");
+  const [staffView, setStaffView] = useState<"today" | "history" | "samples" | "team">("today");
+  // Managers file their own report like staff and also review the team's reports.
+  const isManager = user?.role?.toUpperCase() === "MANAGER";
   const [samples, setSamples] = useState<ReportSample[]>([]);
   const [samplesLoading, setSamplesLoading] = useState(false);
   const [sampleModal, setSampleModal] = useState<"save" | "use" | null>(null);
@@ -2750,6 +2759,7 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
           { id: "today", label: "Today's Report", icon: ClipboardCheck },
           { id: "history", label: "My Reports & Feedback", icon: MessageSquare },
           { id: "samples", label: `My Samples (${samples.length})`, icon: Copy },
+          ...(isManager ? [{ id: "team", label: "Team Reports", icon: Users }] as const : []),
         ] as const).map((t) => (
           <button
             key={t.id}
@@ -2765,7 +2775,15 @@ export function DailyReportTab({ user }: { user: any; staffUsers?: any[] }) {
         ))}
       </div>
       {sampleToastEl}
-      {staffView === "history" ? <StaffMyReports user={user} /> : staffView === "samples" ? renderSamples() : renderToday()}
+      {staffView === "team" && isManager ? (
+        <AdminReportsOverview user={user} />
+      ) : staffView === "history" ? (
+        <StaffMyReports user={user} />
+      ) : staffView === "samples" ? (
+        renderSamples()
+      ) : (
+        renderToday()
+      )}
       {sampleModals}
     </div>
   );

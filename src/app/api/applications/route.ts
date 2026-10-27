@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 import { logActivity } from "@/lib/activityLog";
-import { canManageApplications, isAdmin } from "@/lib/permissions";
+import { canManageApplications, hasAllClientAccess } from "@/lib/permissions";
 import { routeFromService } from "@/lib/serviceTypes";
 import { defaultRouteForService, routeForApplication } from "@/lib/serviceWorkflows";
 import { firstStage, routeStages } from "@/lib/workflow";
@@ -18,7 +18,7 @@ export async function GET() {
 
     const where: any = {};
 
-    if (!isAdmin(currentUser.role)) {
+    if (!hasAllClientAccess(currentUser.role)) {
       where.client = {
         assignedStaffId: currentUser.id,
       };

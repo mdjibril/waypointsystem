@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { canReviewDailyReports, isAdmin as isAdminRole } from "@/lib/permissions";
 
 // GET /api/daily-reports?date=YYYY-MM-DD (v2)
 export async function GET(req: NextRequest) {
@@ -12,7 +13,10 @@ export async function GET(req: NextRequest) {
     const dateParam = searchParams.get("date");
     const monthParam = searchParams.get("month"); // e.g. "2026-10"
     const allParam = searchParams.get("all") === "true" || dateParam === "all";
-    const isAdmin = user.role.toUpperCase() === "ADMIN";
+    // Admins always see the team's submitted reports. Managers also file their own report, so they
+    // get the team view only when they ask for it (scope=team) and their own reports otherwise.
+    const isAdmin =
+      isAdminRole(user.role) || (canReviewDailyReports(user.role) && searchParams.get("scope") === "team");
 
     let dateWhere: any = undefined;
     if (allParam) {

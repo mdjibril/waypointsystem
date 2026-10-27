@@ -5,11 +5,35 @@
 import { WorkflowStage } from "@/types";
 import { SENSITIVE_STAGES } from "@/lib/workflow";
 
-export function isAdmin(role: string): boolean {
-  return role === "ADMIN";
+// Roles, highest first: ADMIN > MANAGER > STAFF. Stored lowercase in the database;
+// getCurrentUserFromCookies upper-cases them.
+export const ROLES = ["ADMIN", "MANAGER", "STAFF"] as const;
+export type Role = (typeof ROLES)[number];
+
+export const ROLE_LABELS: Record<Role, string> = {
+  ADMIN: "Admin",
+  MANAGER: "Manager",
+  STAFF: "Staff",
+};
+
+export function isValidRole(role: unknown): role is Role {
+  return typeof role === "string" && (ROLES as readonly string[]).includes(role.toUpperCase());
 }
 
-// ADMIN, or the staff member a client is assigned to, can act on that client
+export function isAdmin(role: string): boolean {
+  return role?.toUpperCase() === "ADMIN";
+}
+
+export function isManager(role: string): boolean {
+  return role?.toUpperCase() === "MANAGER";
+}
+
+// ADMIN and MANAGER work across every client; STAFF only on clients assigned to them.
+export function hasAllClientAccess(role: string): boolean {
+  return isAdmin(role) || isManager(role);
+}
+
+// ADMIN, MANAGER, or the staff member a client is assigned to, can act on that client
 // (and by extension, anything scoped to that client: their applications,
 // stage transitions, payments).
 export function canAccessClient(
@@ -17,7 +41,7 @@ export function canAccessClient(
   clientAssignedStaffId: number | null,
   userId: number
 ): boolean {
-  return isAdmin(role) || clientAssignedStaffId === userId;
+  return hasAllClientAccess(role) || clientAssignedStaffId === userId;
 }
 
 // Only ADMIN can create/update client records or application records directly.
@@ -29,7 +53,7 @@ export function canManageApplications(role: string): boolean {
   return isAdmin(role);
 }
 
-// ADMIN can move any application. Assigned staff can move their own clients'
+// ADMIN and MANAGER can move any application. Assigned staff can move their own clients'
 // applications, but are blocked from transitioning into or out of sensitive
 // stages (DECISION, APPLICATION_SUBMISSION, QUALITY_REVIEW).
 export function canTransitionApplication(
@@ -39,7 +63,7 @@ export function canTransitionApplication(
   fromStage?: WorkflowStage,
   toStage?: WorkflowStage,
 ): boolean {
-  if (isAdmin(role)) return true;
+  if (hasAllClientAccess(role)) return true;
 
   if (!canAccessClient(role, clientAssignedStaffId, userId)) return false;
 
@@ -75,7 +99,7 @@ export function canVerifyDocument(role: string): boolean {
   return isAdmin(role);
 }
 
-// ADMIN, or the staff member assigned to the client, can record a payment.
+// ADMIN, MANAGER, or the staff member assigned to the client, can record a payment.
 export function canRecordPayment(
   role: string,
   clientAssignedStaffId: number | null,
@@ -84,8 +108,24 @@ export function canRecordPayment(
   return canAccessClient(role, clientAssignedStaffId, userId);
 }
 
-// Only ADMIN can confirm/reject a recorded payment.
+// ADMIN and MANAGER handle everything about payments: confirming/rejecting, editing
+// outstanding balances and deleting records.
 export function canConfirmPayment(role: string): boolean {
+  return hasAllClientAccess(role);
+}
+
+export function canManagePayments(role: string): boolean {
+  return hasAllClientAccess(role);
+}
+
+// ADMIN and MANAGER see every staff member's daily reports and can comment on (review) them.
+// Managers also submit their own reports, which they cannot review themselves.
+export function canReviewDailyReports(role: string): boolean {
+  return hasAllClientAccess(role);
+}
+
+// Only ADMIN manages user accounts: creating, deleting, and changing roles or status.
+export function canManageUsers(role: string): boolean {
   return isAdmin(role);
 }
 

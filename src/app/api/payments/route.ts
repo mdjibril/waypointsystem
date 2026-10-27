@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 import { logActivity } from "@/lib/activityLog";
 import { formatAmount } from "@/lib/currency";
-import { canConfirmPayment, canRecordPayment, isAdmin } from "@/lib/permissions";
+import { canConfirmPayment, canManagePayments, canRecordPayment, hasAllClientAccess } from "@/lib/permissions";
 
 // Payment statuses:
 //   PENDING     - money received, awaiting admin confirmation
@@ -60,7 +60,7 @@ async function restoreOutstanding(tx: Prisma.TransactionClient, payment: { notes
   });
 }
 
-// GET /api/payments - List payments (ADMIN: all, STAFF: assigned clients only)
+// GET /api/payments - List payments (ADMIN/MANAGER: all, STAFF: assigned clients only)
 export async function GET() {
   try {
     const currentUser = await getCurrentUserFromCookies();
@@ -71,7 +71,7 @@ export async function GET() {
 
     const where: any = {};
 
-    if (!isAdmin(currentUser.role)) {
+    if (!hasAllClientAccess(currentUser.role)) {
       where.client = {
         assignedStaffId: currentUser.id,
       };
@@ -224,7 +224,7 @@ async function payTowardsOutstanding(
 
   const remaining = Math.max(0, Math.round((outstanding.amount - amount) * 100) / 100);
   const settled = remaining === 0;
-  // Admins confirm the payment as they record it; staff payments wait for admin confirmation.
+  // Admins and managers confirm the payment as they record it; staff payments wait for confirmation.
   const confirmNow = canConfirmPayment(currentUser.role);
   const invoiceNumber = await nextInvoiceNumber();
 
@@ -267,7 +267,7 @@ async function payTowardsOutstanding(
   return NextResponse.json({ payment, outstanding: updatedOutstanding }, { status: 201 });
 }
 
-// PATCH /api/payments - Confirm/reject a payment, edit an outstanding balance, or attach a receipt (admin only)
+// PATCH /api/payments - Confirm/reject a payment, edit an outstanding balance, or attach a receipt (admin/manager)
 export async function PATCH(request: Request) {
   try {
     const currentUser = await getCurrentUserFromCookies();
@@ -281,7 +281,7 @@ export async function PATCH(request: Request) {
 
     if (!canConfirmPayment(currentUser.role)) {
       return NextResponse.json(
-        { error: "Only administrators can update payments" },
+        { error: "Only admins and managers can update payments" },
         { status: 403 }
       );
     }
@@ -379,7 +379,7 @@ export async function PATCH(request: Request) {
   }
 }
 
-// DELETE /api/payments?id=NN - Delete a payment/receipt record (admin only)
+// DELETE /api/payments?id=NN - Delete a payment/receipt record (admin/manager)
 export async function DELETE(request: Request) {
   try {
     const currentUser = await getCurrentUserFromCookies();
@@ -391,9 +391,9 @@ export async function DELETE(request: Request) {
       );
     }
 
-    if (!isAdmin(currentUser.role)) {
+    if (!canManagePayments(currentUser.role)) {
       return NextResponse.json(
-        { error: "Only administrators can delete payments" },
+        { error: "Only admins and managers can delete payments" },
         { status: 403 }
       );
     }

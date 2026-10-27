@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 import { logActivity } from "@/lib/activityLog";
-import { canVerifyDocument, isAdmin } from "@/lib/permissions";
+import { canVerifyDocument, hasAllClientAccess } from "@/lib/permissions";
 
 // GET /api/documents - List documents (ADMIN: all, STAFF: assigned clients only)
 export async function GET() {
@@ -15,7 +15,7 @@ export async function GET() {
 
     const where: any = {};
 
-    if (!isAdmin(currentUser.role)) {
+    if (!hasAllClientAccess(currentUser.role)) {
       where.client = {
         assignedStaffId: currentUser.id,
       };

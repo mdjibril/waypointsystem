@@ -33,18 +33,18 @@ export function Sidebar({ currentTab, setCurrentTab, isOpen, onClose }: SidebarP
   };
 
   const menuItems = [
-    { id: "dashboard", name: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "STAFF"] },
-    { id: "clients", name: "Clients", icon: Users, roles: ["ADMIN", "STAFF"] },
-    { id: "applications", name: "Applications", icon: FileText, roles: ["ADMIN", "STAFF"] },
-    { id: "pipeline", name: "Pipeline", icon: Workflow, roles: ["ADMIN", "STAFF"] },
-    { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["ADMIN", "STAFF"] },
-    { id: "documents", name: "Documents", icon: FileText, roles: ["ADMIN", "STAFF"] },
-    { id: "daily-report", name: "Daily Report", icon: ClipboardCheck, roles: ["ADMIN", "STAFF"] },
-    { id: "payments", name: "Payments", icon: CreditCard, roles: ["ADMIN", "STAFF"] },
+    { id: "dashboard", name: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "MANAGER", "STAFF"] },
+    { id: "clients", name: "Clients", icon: Users, roles: ["ADMIN", "MANAGER", "STAFF"] },
+    { id: "applications", name: "Applications", icon: FileText, roles: ["ADMIN", "MANAGER", "STAFF"] },
+    { id: "pipeline", name: "Pipeline", icon: Workflow, roles: ["ADMIN", "MANAGER", "STAFF"] },
+    { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["ADMIN", "MANAGER", "STAFF"] },
+    { id: "documents", name: "Documents", icon: FileText, roles: ["ADMIN", "MANAGER", "STAFF"] },
+    { id: "daily-report", name: "Daily Report", icon: ClipboardCheck, roles: ["ADMIN", "MANAGER", "STAFF"] },
+    { id: "payments", name: "Payments", icon: CreditCard, roles: ["ADMIN", "MANAGER", "STAFF"] },
     { id: "reviews", name: "Quality Review", icon: ShieldCheck, roles: ["ADMIN"] },
     { id: "reports", name: "Reports", icon: BarChart3, roles: ["ADMIN"] },
     { id: "staff", name: "Staff Management", icon: Users, roles: ["ADMIN"] },
-    { id: "settings", name: "Settings", icon: Settings, roles: ["ADMIN", "STAFF"] },
+    { id: "settings", name: "Settings", icon: Settings, roles: ["ADMIN", "MANAGER", "STAFF"] },
   ];
 
   const filteredMenuItems = menuItems.filter(
