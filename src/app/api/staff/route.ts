@@ -2,10 +2,20 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
+import { getCurrentUserFromCookies } from "@/lib/auth";
+import { canManageUsers, isValidRole } from "@/lib/permissions";
 
-// GET /api/staff - List all staff members
+const forbidden = (error = "Only administrators can manage user accounts") =>
+  NextResponse.json({ error }, { status: 403 });
+const unauthorized = () => NextResponse.json({ error: "Authentication required" }, { status: 401 });
+
+// GET /api/staff - List all staff members (admin only)
 export async function GET() {
   try {
+    const currentUser = await getCurrentUserFromCookies();
+    if (!currentUser) return unauthorized();
+    if (!canManageUsers(currentUser.role)) return forbidden();
+
     const users = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
     });
@@ -23,9 +33,13 @@ export async function GET() {
   }
 }
 
-// POST /api/staff - Create a new staff member
+// POST /api/staff - Create a new staff member (admin only)
 export async function POST(request: Request) {
   try {
+    const currentUser = await getCurrentUserFromCookies();
+    if (!currentUser) return unauthorized();
+    if (!canManageUsers(currentUser.role)) return forbidden();
+
     const { name, email, phone, role } = await request.json();
 
     if (!name || !email || !role) {
@@ -33,6 +47,10 @@ export async function POST(request: Request) {
         { error: "Name, email, and role are required" },
         { status: 400 }
       );
+    }
+
+    if (!isValidRole(role)) {
+      return NextResponse.json({ error: "Role must be Admin, Manager or Staff" }, { status: 400 });
     }
 
     const existing = await prisma.user.findUnique({
@@ -72,9 +90,13 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH /api/staff - Update a staff member
+// PATCH /api/staff - Update a staff member. Admins can update anyone, including role and
+// status; everyone else can only edit their own profile and password.
 export async function PATCH(request: Request) {
   try {
+    const currentUser = await getCurrentUserFromCookies();
+    if (!currentUser) return unauthorized();
+
     const { userId, name, email, phone, role, status, password } = await request.json();
 
     if (!userId) {
@@ -82,6 +104,23 @@ export async function PATCH(request: Request) {
         { error: "User ID is required" },
         { status: 400 }
       );
+    }
+
+    const isSelf = Number(userId) === currentUser.id;
+    const isAdminUser = canManageUsers(currentUser.role);
+    if (!isAdminUser && !isSelf) return forbidden("You can only update your own profile");
+    if (!isAdminUser && (role !== undefined || status !== undefined)) {
+      return forbidden("Only administrators can change roles or account status");
+    }
+    // Stops an admin from locking themselves (and possibly everyone) out of administration
+    if (isSelf && role !== undefined && role.toUpperCase() !== currentUser.role) {
+      return forbidden("You cannot change your own role");
+    }
+    if (isSelf && status !== undefined && status !== "active") {
+      return forbidden("You cannot deactivate your own account");
+    }
+    if (role !== undefined && !isValidRole(role)) {
+      return NextResponse.json({ error: "Role must be Admin, Manager or Staff" }, { status: 400 });
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -142,9 +181,13 @@ export async function PATCH(request: Request) {
   }
 }
 
-// DELETE /api/staff - Delete a staff member
+// DELETE /api/staff - Delete a staff member (admin only)
 export async function DELETE(request: Request) {
   try {
+    const currentUser = await getCurrentUserFromCookies();
+    if (!currentUser) return unauthorized();
+    if (!canManageUsers(currentUser.role)) return forbidden();
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
 
@@ -153,6 +196,10 @@ export async function DELETE(request: Request) {
         { error: "User ID is required" },
         { status: 400 }
       );
+    }
+
+    if (Number(userId) === currentUser.id) {
+      return forbidden("You cannot delete your own account");
     }
 
     const user = await prisma.user.findUnique({

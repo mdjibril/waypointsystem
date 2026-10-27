@@ -11,6 +11,12 @@ import {
   canRecordPayment,
   canConfirmPayment,
   canDecideQualityReview,
+  canManagePayments,
+  canManageUsers,
+  canReviewDailyReports,
+  hasAllClientAccess,
+  isManager,
+  isValidRole,
 } from "@/lib/permissions";
 
 describe("isAdmin", () => {
@@ -116,7 +122,7 @@ describe("canUpdateTask", () => {
 });
 
 describe("canVerifyDocument / canConfirmPayment / canDecideQualityReview", () => {
-  it("are all admin-only", () => {
+  it("are not available to staff", () => {
     expect(canVerifyDocument("ADMIN")).toBe(true);
     expect(canVerifyDocument("STAFF")).toBe(false);
     expect(canConfirmPayment("ADMIN")).toBe(true);
@@ -137,5 +143,51 @@ describe("canRecordPayment", () => {
 
   it("blocks a staff member from recording a payment for someone else's client", () => {
     expect(canRecordPayment("STAFF", 3, 4)).toBe(false);
+  });
+});
+
+describe("MANAGER role", () => {
+  it("sits between staff and admin", () => {
+    expect(isValidRole("manager")).toBe(true);
+    expect(isValidRole("MANAGER")).toBe(true);
+    expect(isValidRole("owner")).toBe(false);
+    expect(isAdmin("MANAGER")).toBe(false);
+    expect(isManager("MANAGER")).toBe(true);
+  });
+
+  it("works on every client, assigned or not", () => {
+    expect(hasAllClientAccess("MANAGER")).toBe(true);
+    expect(hasAllClientAccess("STAFF")).toBe(false);
+    expect(canAccessClient("MANAGER", 42, 1)).toBe(true);
+    expect(canAccessClient("MANAGER", null, 1)).toBe(true);
+  });
+
+  it("can move any client through any stage, including sensitive ones", () => {
+    expect(canTransitionApplication("MANAGER", 42, 1, "CLIENT_INQUIRY", "CUSTOMER_SERVICE_REGISTRATION")).toBe(true);
+    expect(canTransitionApplication("MANAGER", null, 1, "DECISION", "FLIGHT_BOOKING")).toBe(true);
+    expect(canTransitionApplication("MANAGER", 42, 1, "VISA_PROCESSING", "QUALITY_REVIEW")).toBe(true);
+  });
+
+  it("handles every payment action", () => {
+    expect(canRecordPayment("MANAGER", 42, 1)).toBe(true);
+    expect(canConfirmPayment("MANAGER")).toBe(true);
+    expect(canManagePayments("MANAGER")).toBe(true);
+    expect(canManagePayments("STAFF")).toBe(false);
+  });
+
+  it("reviews daily reports", () => {
+    expect(canReviewDailyReports("MANAGER")).toBe(true);
+    expect(canReviewDailyReports("ADMIN")).toBe(true);
+    expect(canReviewDailyReports("STAFF")).toBe(false);
+  });
+
+  it("does not get admin-only powers", () => {
+    expect(canManageUsers("MANAGER")).toBe(false);
+    expect(canManageUsers("ADMIN")).toBe(true);
+    expect(canManageClients("MANAGER")).toBe(false);
+    expect(canManageApplications("MANAGER")).toBe(false);
+    expect(canCreateTask("MANAGER")).toBe(false);
+    expect(canVerifyDocument("MANAGER")).toBe(false);
+    expect(canDecideQualityReview("MANAGER")).toBe(false);
   });
 });

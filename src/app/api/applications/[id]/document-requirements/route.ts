@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { canAccessClient } from "@/lib/permissions";
 
 // GET /api/applications/[id]/document-requirements — Get per-app checklist
 export async function GET(
@@ -25,7 +26,7 @@ export async function GET(
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
 
-    if (currentUser.role !== "ADMIN" && application.client.assignedStaffId !== currentUser.id) {
+    if (!canAccessClient(currentUser.role, application.client.assignedStaffId, currentUser.id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -74,7 +75,7 @@ export async function POST(
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
 
-    if (currentUser.role !== "ADMIN" && application.client.assignedStaffId !== currentUser.id) {
+    if (!canAccessClient(currentUser.role, application.client.assignedStaffId, currentUser.id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -131,7 +132,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
 
-    if (currentUser.role !== "ADMIN" && application.client.assignedStaffId !== currentUser.id) {
+    if (!canAccessClient(currentUser.role, application.client.assignedStaffId, currentUser.id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

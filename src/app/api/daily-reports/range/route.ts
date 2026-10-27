@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { canReviewDailyReports } from "@/lib/permissions";
 
 // GET /api/daily-reports/range?from=YYYY-MM-DD&to=YYYY-MM-DD&staffId=123
-// Returns all reports for the given date range (admin only)
+// Returns all reports for the given date range (admin/manager)
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUserFromCookies();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const isAdmin = user.role.toUpperCase() === "ADMIN";
-    if (!isAdmin) {
+    if (!canReviewDailyReports(user.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

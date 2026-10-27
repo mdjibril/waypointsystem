@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 import { logActivity } from "@/lib/activityLog";
-import { canManageClients, isAdmin } from "@/lib/permissions";
+import { canManageClients, hasAllClientAccess } from "@/lib/permissions";
 
 // GET /api/clients - List clients (ADMIN: all, non-ADMIN: assigned only)
 export async function GET() {
@@ -15,7 +15,7 @@ export async function GET() {
 
     const where: any = {};
 
-    if (!isAdmin(currentUser.role)) {
+    if (!hasAllClientAccess(currentUser.role)) {
       where.assignedStaffId = currentUser.id;
     }
 

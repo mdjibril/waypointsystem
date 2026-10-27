@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { canReviewDailyReports, isAdmin } from "@/lib/permissions";
 
 // PATCH /api/daily-reports/[id] – supervisor reviews a report
 export async function PATCH(
@@ -10,13 +11,19 @@ export async function PATCH(
   try {
     const user = await getCurrentUserFromCookies();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (user.role.toUpperCase() !== "ADMIN") {
+    if (!canReviewDailyReports(user.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { id: rawId } = await params;
     const id = parseInt(rawId, 10);
     if (isNaN(id)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+
+    const target = await prisma.dailyReport.findUnique({ where: { id }, select: { staffId: true } });
+    if (!target) return NextResponse.json({ error: "Report not found" }, { status: 404 });
+    if (target.staffId === user.id) {
+      return NextResponse.json({ error: "You cannot review your own report" }, { status: 403 });
+    }
 
     const { supervisorComment, supervisorName, selfRating } = await req.json();
 
@@ -66,8 +73,7 @@ export async function GET(
 
     if (!report) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const isAdmin = user.role.toUpperCase() === "ADMIN";
-    if (!isAdmin && report.staffId !== user.id) {
+    if (!canReviewDailyReports(user.role) && report.staffId !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -86,7 +92,7 @@ export async function DELETE(
   try {
     const user = await getCurrentUserFromCookies();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (user.role.toUpperCase() !== "ADMIN") {
+    if (!isAdmin(user.role)) {
       return NextResponse.json({ error: "Forbidden: Only admins can delete reports" }, { status: 403 });
     }
 
